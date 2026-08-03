@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ติดตามออเดอร์</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body class="bg-gray-100 font-sans p-4">
+
+    <div class="max-w-md mx-auto bg-white rounded-xl shadow-lg overflow-hidden pb-6">
+        <div class="bg-blue-600 p-4 text-center">
+            <h1 class="text-2xl font-bold text-white">📦 สถานะออเดอร์ของคุณ</h1>
+        </div>
+
+        <div id="loading" class="text-center p-10">
+            <p class="text-gray-500 font-bold animate-pulse">กำลังตรวจสอบสถานะ...</p>
+        </div>
+
+        <div id="error-msg" class="hidden text-center p-10 text-red-500 font-bold"></div>
+
+        <div id="not-in-client" class="hidden text-center p-10">
+            <p class="text-5xl mb-3">📱</p>
+            <p class="text-gray-700 font-bold mb-4">กรุณาเปิดหน้านี้ผ่านแอป LINE เพื่อดูสถานะออเดอร์ค่ะ</p>
+            <a id="open-in-line-link" href="#" class="inline-block bg-green-600 text-white font-bold py-2 px-6 rounded-lg">เปิดใน LINE</a>
+        </div>
+
+        <div id="status-container" class="hidden p-6">
+            <div class="mb-6 pb-4 border-b border-gray-200">
+                <p class="text-sm text-gray-500">หมายเลขออเดอร์</p>
+                <h2 id="order-id" class="text-xl font-bold text-gray-800">YTK-XXXXX</h2>
+                <p id="order-items" class="text-sm text-gray-600 mt-2">รายการอาหาร...</p>
+            </div>
+
+            <div class="relative pl-6 border-l-2 border-blue-500 space-y-6">
+                <div class="relative">
+                    <div class="absolute -left-8 bg-blue-500 w-4 h-4 rounded-full border-4 border-white"></div>
+                    <h3 class="text-lg font-bold text-blue-600">สถานะล่าสุด</h3>
+                    <p id="order-status" class="text-2xl font-black text-gray-800 mt-1">กำลังตรวจสอบ</p>
+                    <p class="text-xs text-gray-500 mt-1">*เมื่อสถานะเปลี่ยนเป็น "รอไรเดอร์" ให้ลูกค้ากเรียกรถได้เลยค่ะ</p>
+                </div>
+            </div>
+
+            <button onclick="liff.closeWindow()" class="mt-8 w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+
+    <script>
+        // เปลี่ยนเป็น LIFF ID ของคุณ
+        const MY_LIFF_ID = '2010829644-9Su4yJnw';
+        const EXEC_URL = 'https://script.google.com/macros/s/AKfycbz0Q2AG7WlKzQaWCNii47VS8DU__Tz4eOAAIiCkCn5VL3uBazq9YiGDtf0wYis_A-nlVw/exec';
+
+        async function callApi(action, params) {
+            const res = await fetch(EXEC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: action, params: params || {} })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+            return data.result;
+        }
+
+        function withTimeout(promise, ms, timeoutMessage) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error(timeoutMessage)), ms))
+            ]);
+        }
+
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error-msg').classList.remove('hidden');
+            document.getElementById('error-msg').innerText = message;
+        }
+
+        async function main() {
+            document.getElementById('open-in-line-link').href = 'https://liff.line.me/' + MY_LIFF_ID;
+
+            try {
+                await withTimeout(liff.init({ liffId: MY_LIFF_ID }), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป');
+            } catch (err) {
+                showError('เชื่อมต่อ LINE ไม่สำเร็จ: ' + err.message);
+                return;
+            }
+
+            if (!liff.isLoggedIn()) {
+                if (!liff.isInClient()) {
+                    // เปิดนอกแอป LINE - หน้าเว็บของ Apps Script ไม่รองรับ login ผ่าน redirect ในเบราว์เซอร์ปกติ
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('not-in-client').classList.remove('hidden');
+                    return;
+                }
+                liff.login();
+                return;
+            }
+
+            let profile;
+            try {
+                profile = await liff.getProfile();
+            } catch (err) {
+                showError('ดึงข้อมูลโปรไฟล์ LINE ไม่สำเร็จ: ' + err.message);
+                return;
+            }
+
+            callApi('getLatestOrder', { userId: profile.userId })
+                .then(showStatus)
+                .catch((err) => showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message));
+        }
+
+        function showStatus(res) {
+            document.getElementById('loading').classList.add('hidden');
+
+            if (res.success) {
+                document.getElementById('status-container').classList.remove('hidden');
+                document.getElementById('order-id').innerText = res.orderId;
+                document.getElementById('order-items').innerText = res.items;
+                document.getElementById('order-status').innerText = res.status;
+            } else {
+                showError(res.message);
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

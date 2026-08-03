@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Yateem Market - สั่งอาหาร & สินค้าแห้ง</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        .loader { border-top-color: #00B900; animation: spinner 1.5s linear infinite; }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="container mx-auto p-4 pb-24">
+        <div class="text-center mb-6 p-4 bg-white rounded-lg shadow">
+            <img src="https://drive.google.com/thumbnail?id=13K6Z1B92MB6UsGCJZsggaHGRGo8baili&sz=w200" alt="Yateem TV" class="w-16 h-16 mx-auto mb-2 rounded-full">
+            <h1 class="text-2xl font-bold text-blue-800">Yateem Market</h1>
+            <p class="text-sm text-amber-600 font-semibold">ทุกการซื้อคือการให้</p>
+        </div>
+
+        <!-- สลับโหมด: อาหาร (ตามวัน/เวลาที่แอดมินตั้งไว้) / สินค้าแห้ง (ทุกวัน 24 ชม.) -->
+        <div id="tabs" class="flex gap-2 mb-4">
+            <button id="tab-btn-food" onclick="switchTab('food')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
+                🍲 Yateem Kitchen<br><span id="food-tab-subtext" class="text-xs font-normal">กำลังโหลด...</span>
+            </button>
+            <button id="tab-btn-nw" onclick="switchTab('nw')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
+                📦 สั่งซื้อสินค้าจากยาตีมทีวี<br><span class="text-xs font-normal">ส่งทั่วประเทศ • เปิดตลอด 24 ชม.</span>
+            </button>
+        </div>
+
+        <!-- ========================= FOOD TAB ========================= -->
+        <div id="panel-food" class="hidden">
+            <div id="food-loading" class="text-center p-10">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto"></div>
+                <p>กำลังโหลดเมนู...</p>
+            </div>
+
+            <div id="food-closed" class="hidden text-center bg-white p-8 rounded-lg shadow mb-6">
+                <p class="text-5xl mb-4">⏰</p>
+                <h2 class="text-xl font-bold text-gray-700 mb-3">ปิดขายเมนูอาหารอยู่ค่ะ</h2>
+                <p id="food-closed-note" class="text-gray-600 leading-relaxed">กำลังโหลดข้อมูลวัน/เวลาเปิดขาย...</p>
+                <button onclick="switchTab('nw')" class="mt-5 bg-blue-600 text-white font-bold px-6 py-2 rounded-full">สั่งสินค้าแห้งได้เลย (ส่งทั่วประเทศ 24 ชม.) →</button>
+            </div>
+
+            <div id="food-blocked" class="hidden text-center bg-white p-8 rounded-lg shadow mb-6">
+                <p class="text-5xl mb-4">🚫</p>
+                <h2 class="text-xl font-bold text-red-600 mb-3">ขออภัยค่ะ 🙏</h2>
+                <p id="food-blocked-msg" class="text-gray-700 leading-relaxed"></p>
+                <p class="text-xs text-gray-500 mt-4">*สำหรับคน กทม. กรุณาสแกนเช็กอินสะสมแต้มบนทีวีก่อนใช้งานนะคะ</p>
+            </div>
+
+            <div id="food-menu-section" class="hidden">
+                <h2 class="text-lg font-bold mb-4 text-gray-800">🍱 เลือกรายการอาหาร</h2>
+                <div id="food-menu-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
+
+                <div class="fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg border-t z-50">
+                    <div class="flex justify-between items-center container mx-auto gap-2">
+                        <p class="text-lg font-semibold">ยอดรวม: <span id="total-price-food" class="text-green-600 text-xl">0</span> บาท</p>
+                        <div class="flex items-center gap-2">
+                            <button onclick="cancelCheckout('food')" id="btn-cancel-food" class="hidden bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold">ยกเลิก</button>
+                            <button onclick="proceedToCheckout('food')" id="btn-next-food" class="bg-gray-400 text-white px-6 py-2 rounded-full font-bold" disabled>ยืนยันออเดอร์</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="food-order-section" class="hidden bg-white p-6 rounded-lg shadow mb-6">
+                <h2 class="text-xl font-bold mb-4">🏠 ข้อมูลจัดส่ง & ชำระเงิน</h2>
+
+                <form onsubmit="finalSubmitFood(event)">
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่งของคุณ (ปักหมุดบ้าน)*</label>
+                        <textarea id="food-address" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500" rows="3" placeholder="กรุณากรอกที่อยู่ชัดเจน เพื่อให้ไรเดอร์มารับอาหารไปส่งได้ถูกค่ะ"></textarea>
+                        <p class="text-xs text-gray-500 mt-1">*ที่อยู่นี้จะเป็นจุดที่ลูกค้าปักหมุดเรียกไรเดอร์ในแอป (Grab/LINE MAN/Bolt)</p>
+                    </div>
+
+                    <div class="mb-6 p-4 border border-dashed border-green-500 rounded-lg text-center bg-green-50">
+                        <p class="text-sm text-green-700 font-bold mb-2">ช่องทางชำระเงิน ( PromptPay QR )</p>
+                        <img src="https://via.placeholder.com/200x200.png?text=PromptPay+QR" alt="PromptPay QR สถานี" class="mx-auto w-40 h-40 mb-2">
+                        <p class="text-xs text-gray-500">ชื่อบัญชี: สถานี Yateem TV</p>
+                        <p class="text-sm font-bold text-gray-700 mt-2">ยอดเงินที่ต้องโอน: <span class="final-total-food text-xl text-green-600">0</span> บาท</p>
+                        <p class="text-xs text-red-500 mt-1">*โอนเฉพาะค่าอาหารเท่านั้น ค่าส่งจ่ายไรเดอร์ในแอปค่ะ</p>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">อัปโหลดสลิปโอนเงิน*</label>
+                        <input type="file" id="food-slip" accept="image/*" required class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" onclick="backToMenu('food')" class="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold">กลับ</button>
+                        <button type="submit" id="btn-submit-food" class="w-2/3 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">แจ้งโอน & สั่งซื้อ</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="food-rider-section" class="hidden bg-white p-6 rounded-lg shadow mb-6 text-center">
+                <p class="text-5xl mb-3">🛵</p>
+                <h2 class="text-xl font-bold text-green-700 mb-2">สั่งซื้อสำเร็จ! เรียกไรเดอร์มารับอาหารได้เลย</h2>
+                <p id="food-rider-order-id" class="text-sm text-gray-500 mb-4"></p>
+
+                <div class="text-left bg-gray-50 rounded-lg p-4 mb-2 text-sm">
+                    <p class="font-bold text-gray-700">📍 จุดรับอาหาร (ต้นทาง)</p>
+                    <p id="food-rider-pickup" class="text-gray-600 mb-2"></p>
+                    <p class="font-bold text-gray-700">🏠 จุดส่ง (ที่อยู่ของคุณ)</p>
+                    <p id="food-rider-dropoff" class="text-gray-600"></p>
+                </div>
+                <p class="text-xs text-gray-500 mb-4">*กดเปิดแอปแล้วกรอกจุดรับ-ส่งด้านบนเองในแอปได้เลยค่ะ (แอปขนส่งยังไม่รองรับการกรอกที่อยู่ให้อัตโนมัติ)</p>
+
+                <div class="space-y-2">
+                    <a href="grab://open?screen=express" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress</a>
+                    <a href="https://lineman.onelink.me/1Nnr/lineman" target="_blank" class="block w-full text-center bg-green-500 text-white font-bold py-3 rounded-lg shadow hover:bg-green-600">เรียก LINE MAN Messenger</a>
+                    <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-3 rounded-lg shadow hover:bg-blue-700">เรียก Bolt Send Package</a>
+                </div>
+
+                <button onclick="liff.closeWindow()" class="mt-5 w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+
+        <!-- ========================= NATIONWIDE (DRY GOODS) TAB ========================= -->
+        <div id="panel-nw" class="hidden">
+            <div id="nw-loading" class="text-center p-10">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color:#2563eb;"></div>
+                <p>กำลังโหลดสินค้า...</p>
+            </div>
+
+            <div id="nw-error" class="hidden text-center bg-white p-8 rounded-lg shadow mb-6">
+                <p class="text-5xl mb-4">🚫</p>
+                <h2 class="text-xl font-bold text-red-600 mb-3">เกิดข้อผิดพลาด</h2>
+                <p id="nw-error-msg" class="text-gray-700 leading-relaxed"></p>
+            </div>
+
+            <div id="nw-menu-section" class="hidden">
+                <h2 class="text-lg font-bold mb-4 text-gray-800">📦 เลือกสินค้าแห้ง (จัดส่งทั่วประเทศ)</h2>
+                <div id="nw-menu-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
+
+                <div class="fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg border-t z-50">
+                    <div class="flex justify-between items-center container mx-auto gap-2">
+                        <p class="text-lg font-semibold">ยอดรวม: <span id="total-price-nw" class="text-blue-600 text-xl">0</span> บาท</p>
+                        <div class="flex items-center gap-2">
+                            <button onclick="cancelCheckout('nw')" id="btn-cancel-nw" class="hidden bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold">ยกเลิก</button>
+                            <button onclick="proceedToCheckout('nw')" id="btn-next-nw" class="bg-gray-400 text-white px-6 py-2 rounded-full font-bold" disabled>ยืนยันออเดอร์</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="nw-order-section" class="hidden bg-white p-6 rounded-lg shadow mb-6">
+                <h2 class="text-xl font-bold mb-4">🚚 ข้อมูลจัดส่งทั่วประเทศ & ชำระเงิน</h2>
+
+                <form onsubmit="finalSubmitNw(event)">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุลผู้รับ*</label>
+                        <input type="text" id="nw-fullname" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์*</label>
+                        <input type="tel" id="nw-phone" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (ทั่วประเทศ)*</label>
+                        <textarea id="nw-address" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="บ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"></textarea>
+                        <p class="text-xs text-gray-500 mt-1">*แอดมินจะติดต่อกลับเพื่อแจ้งค่าจัดส่งตามพื้นที่และติดตามพัสดุให้ค่ะ</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">เลือกวิธีชำระเงิน*</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="border-2 border-gray-200 has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50 rounded-lg p-3 text-center cursor-pointer block">
+                                <input type="radio" name="nw-payment-method" value="cod" onchange="updateNwPaymentUI()" class="mb-1">
+                                <div class="text-sm font-bold text-gray-800">เก็บเงินปลายทาง</div>
+                                <div class="text-xs text-gray-500">+ ค่าจัดส่ง</div>
+                            </label>
+                            <label class="border-2 border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 rounded-lg p-3 text-center cursor-pointer block">
+                                <input type="radio" name="nw-payment-method" value="transfer" onchange="updateNwPaymentUI()" class="mb-1" checked>
+                                <div class="text-sm font-bold text-gray-800">โอนเงิน</div>
+                                <div class="text-xs text-gray-500">จัดส่งฟรี</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="nw-cod-block" class="hidden mb-6 p-4 border border-dashed border-orange-500 rounded-lg text-center bg-orange-50">
+                        <p class="text-sm text-orange-700 font-bold mb-2">💵 เก็บเงินปลายทาง</p>
+                        <p class="text-xs text-gray-600 mb-2">ชำระเงินสดกับไรเดอร์/พนักงานขนส่งตอนรับพัสดุ ไม่ต้องโอนล่วงหน้า</p>
+                        <p class="text-sm text-gray-700">ค่าสินค้า: <span class="final-total-nw font-bold">0</span> บาท</p>
+                        <p class="text-sm text-gray-700">ค่าจัดส่ง: <span id="nw-cod-fee-display" class="font-bold">0</span> บาท</p>
+                        <p class="text-base font-bold text-orange-700 mt-1">ยอดชำระปลายทางรวม: <span id="nw-cod-grand-total">0</span> บาท</p>
+                    </div>
+
+                    <div id="nw-transfer-block" class="mb-6 p-4 border border-dashed border-blue-500 rounded-lg text-center bg-blue-50">
+                        <p class="text-sm text-blue-700 font-bold mb-2">🏦 โอนเงิน (จัดส่งฟรี)</p>
+                        <p class="text-sm text-gray-700">ชื่อบัญชี: <span id="nw-bank-account-name" class="font-bold">-</span></p>
+                        <p class="text-sm text-gray-700">ธนาคาร: <span id="nw-bank-name" class="font-bold">-</span></p>
+                        <p class="text-sm text-gray-700">เลขที่บัญชี: <span id="nw-bank-account-number" class="font-bold">-</span></p>
+                        <p class="text-sm font-bold text-gray-700 mt-2">ยอดเงินที่ต้องโอน: <span class="final-total-nw text-xl text-blue-600">0</span> บาท</p>
+                    </div>
+
+                    <div id="nw-slip-block" class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">อัปโหลดสลิปโอนเงิน*</label>
+                        <input type="file" id="nw-slip" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" onclick="backToMenu('nw')" class="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold">กลับ</button>
+                        <button type="submit" id="btn-submit-nw" class="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">แจ้งโอน & สั่งซื้อ</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="open-in-line-notice" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
+            <p class="text-5xl mb-3">📱</p>
+            <h2 class="text-lg font-bold text-gray-800 mb-2">กรุณาเปิดผ่านแอป LINE เพื่อสั่งซื้อ</h2>
+            <p class="text-sm text-gray-600 mb-5">การยืนยันตัวตนก่อนสั่งซื้อต้องเปิดหน้านี้จากในแอป LINE เท่านั้นค่ะ (ดูรายการสินค้าต่อในเบราว์เซอร์นี้ได้ตามปกติ แต่ต้องกดสั่งซื้อผ่านแอป LINE นะคะ)</p>
+            <a id="open-in-line-link" href="#" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">เปิดใน LINE เพื่อสั่งซื้อ</a>
+            <button onclick="document.getElementById('open-in-line-notice').classList.add('hidden')" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
+        </div>
+    </div>
+
+    <script>
+        // CONFIG: เปลี่ยนเป็น LIFF ID ของคุณ
+        const MY_LIFF_ID = '2010829644-9Su4yJnw';
+        // CONFIG: ลิงก์ Apps Script backend (ตัวเดียวกับที่เคยใช้ /exec ทั้งหมด) - หน้านี้ยิง fetch() ไปหาแทน google.script.run
+        const EXEC_URL = 'https://script.google.com/macros/s/AKfycbz0Q2AG7WlKzQaWCNii47VS8DU__Tz4eOAAIiCkCn5VL3uBazq9YiGDtf0wYis_A-nlVw/exec';
+        const RESUME_STORAGE_KEY = 'ytk_checkout_state';
+
+        // เรียกฟังก์ชันหลังบ้านผ่าน fetch() ไปที่ Apps Script backend (ข้ามโดเมน แต่ Apps Script อนุญาต CORS ให้แล้ว)
+        async function callApi(action, params) {
+            const res = await fetch(EXEC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // เลี่ยง CORS preflight
+                body: JSON.stringify({ action: action, params: params || {} })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+            return data.result;
+        }
+
+        let liffInitPromise = null;
+        let profile = {};
+        let bkkVerification = {};
+        let pendingResume = null; // { type, cart } กู้คืนหลัง redirect กลับจาก LINE login
+        let foodSettings = null; // { areaTimeNote, orderDay, startHour, endHour, areaKeywords, pickupAddress } - ตั้งค่าได้จากหน้า Admin
+        let nwPaymentSettings = null; // { codShippingFee, bankAccountName, bankName, bankAccountNumber } - ตั้งค่าได้จากหน้า Admin
+        const DAY_NAMES_TH = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
+        const state = {
+            food: { menuData: [], cart: {} },
+            nw: { menuData: [], cart: {} }
+        };
+
+        function main() {
+            document.getElementById('open-in-line-link').href = 'https://liff.line.me/' + MY_LIFF_ID;
+
+            // เช็กว่ากำลังกลับมาจาก LINE login redirect พร้อมตะกร้าที่เซฟไว้หรือไม่
+            try {
+                const raw = sessionStorage.getItem(RESUME_STORAGE_KEY);
+                if (raw) {
+                    pendingResume = JSON.parse(raw);
+                    sessionStorage.removeItem(RESUME_STORAGE_KEY);
+                }
+            } catch (err) { /* ignore storage errors */ }
+
+            // เริ่ม liff.init() ล่วงหน้าตั้งแต่หน้าโหลด (ไม่ต้องรอ) เพื่อให้ตอนกดยืนยันออเดอร์
+            // เรียก liff.login() ได้ทันทีในจังหวะเดียวกับการคลิก - ถ้ารอ init ตอนกดค่อยเรียก
+            // จะเสีย "user activation" ของการคลิกไปตามระหว่างรอ ทำให้เบราว์เซอร์ไม่ยอมให้ redirect
+            // ออกจาก iframe ของ Apps Script ไปหน้า login ของ LINE ได้ (ต้นเหตุของ error "won't allow to display")
+            ensureLiffInit().catch(() => { /* เดี๋ยวลอง init ใหม่อีกทีตอนกดเช็กเอาต์ */ });
+
+            // สินค้าแห้งไม่ขึ้นกับการตั้งค่าวัน/เวลา โหลดและโชว์ได้ทันที
+            loadNwMenu();
+            switchTab(pendingResume ? pendingResume.type : 'nw');
+
+            callApi('getNationwidePaymentSettings')
+                .then((settings) => {
+                    nwPaymentSettings = settings;
+                    applyNwPaymentSettingsToUI(settings);
+                })
+                .catch(() => {
+                    nwPaymentSettings = { codShippingFee: 50, bankAccountName: '-', bankName: '-', bankAccountNumber: '-' };
+                    applyNwPaymentSettingsToUI(nwPaymentSettings);
+                });
+
+            // เมนูอาหารต้องรอโหลดค่าตั้งค่าวัน/เวลา/พื้นที่จากหน้า Admin ก่อน
+            callApi('getFoodSettings')
+                .then((settings) => {
+                    foodSettings = settings;
+                    applyFoodSettingsToUI(settings);
+                    loadFoodMenu();
+
+                    if (!pendingResume) {
+                        const params = new URLSearchParams(window.location.search);
+                        const isTestMode = params.get('test') === '1';
+                        const now = new Date();
+                        const isOpenHours = (now.getDay() === settings.orderDay && now.getHours() >= settings.startHour && now.getHours() < settings.endHour);
+                        if (isOpenHours || isTestMode) switchTab('food');
+                    }
+                })
+                .catch(() => {
+                    // โหลดค่าตั้งค่าไม่สำเร็จ ใช้ค่า default ฝั่งนี้แทนไม่ให้หน้าเว็บพัง
+                    foodSettings = { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'] };
+                    applyFoodSettingsToUI(foodSettings);
+                    loadFoodMenu();
+                });
+        }
+
+        function applyFoodSettingsToUI(settings) {
+            document.getElementById('food-tab-subtext').innerText = settings.areaTimeNote;
+            document.getElementById('food-closed-note').innerHTML =
+                'Yateem Kitchen เปิดขายเมนูอาหารเฉพาะ<b>วัน' + DAY_NAMES_TH[settings.orderDay] + ' เวลา ' + settings.startHour + ':00 - ' + settings.endHour + ':00 น.</b> เท่านั้นค่ะ 🙏 กรุณากลับมาสั่งใหม่ในรอบถัดไปนะคะ';
+        }
+
+        function applyNwPaymentSettingsToUI(settings) {
+            document.getElementById('nw-bank-account-name').innerText = settings.bankAccountName;
+            document.getElementById('nw-bank-name').innerText = settings.bankName;
+            document.getElementById('nw-bank-account-number').innerText = settings.bankAccountNumber;
+        }
+
+        function updateNwPaymentUI() {
+            const method = document.querySelector('input[name="nw-payment-method"]:checked').value;
+            document.getElementById('nw-cod-block').classList.toggle('hidden', method !== 'cod');
+            document.getElementById('nw-transfer-block').classList.toggle('hidden', method !== 'transfer');
+            document.getElementById('nw-slip-block').classList.toggle('hidden', method !== 'transfer');
+            document.getElementById('nw-slip').required = (method === 'transfer');
+
+            if (method === 'cod' && nwPaymentSettings) {
+                const total = Number(document.getElementById('total-price-nw').innerText.replace(/,/g, '')) || 0;
+                document.getElementById('nw-cod-fee-display').innerText = nwPaymentSettings.codShippingFee.toLocaleString();
+                document.getElementById('nw-cod-grand-total').innerText = (total + nwPaymentSettings.codShippingFee).toLocaleString();
+            }
+        }
+
+        function switchTab(tab) {
+            document.getElementById('tab-btn-food').classList.toggle('bg-green-600', tab === 'food');
+            document.getElementById('tab-btn-food').classList.toggle('text-white', tab === 'food');
+            document.getElementById('tab-btn-food').classList.toggle('bg-gray-200', tab !== 'food');
+            document.getElementById('tab-btn-food').classList.toggle('text-gray-700', tab !== 'food');
+
+            document.getElementById('tab-btn-nw').classList.toggle('bg-blue-600', tab === 'nw');
+            document.getElementById('tab-btn-nw').classList.toggle('text-white', tab === 'nw');
+            document.getElementById('tab-btn-nw').classList.toggle('bg-gray-200', tab !== 'nw');
+            document.getElementById('tab-btn-nw').classList.toggle('text-gray-700', tab !== 'nw');
+
+            document.getElementById('panel-food').classList.toggle('hidden', tab !== 'food');
+            document.getElementById('panel-nw').classList.toggle('hidden', tab !== 'nw');
+        }
+
+        // ---------------- โหลดสินค้า (public, ไม่ต้องล็อกอิน) ----------------
+
+        function loadFoodMenu() {
+            const params = new URLSearchParams(window.location.search);
+            const isTestMode = params.get('test') === '1';
+            const now = new Date();
+            const isOpenHours = foodSettings && now.getDay() === foodSettings.orderDay && now.getHours() >= foodSettings.startHour && now.getHours() < foodSettings.endHour;
+
+            if (!isOpenHours && !isTestMode) {
+                document.getElementById('food-loading').classList.add('hidden');
+                document.getElementById('food-closed').classList.remove('hidden');
+                return;
+            }
+
+            callApi('getAvailableMenu')
+                .then(renderFoodMenu)
+                .catch((err) => {
+                    document.getElementById('food-loading').classList.add('hidden');
+                    document.getElementById('food-blocked').classList.remove('hidden');
+                    document.getElementById('food-blocked-msg').innerText = 'เกิดข้อผิดพลาดในการโหลดเมนู: ' + err.message;
+                });
+        }
+
+        function loadNwMenu() {
+            callApi('getAvailableNationwideMenu')
+                .then(renderNwMenu)
+                .catch((err) => {
+                    document.getElementById('nw-loading').classList.add('hidden');
+                    document.getElementById('nw-error').classList.remove('hidden');
+                    document.getElementById('nw-error-msg').innerText = 'เกิดข้อผิดพลาดในการโหลดสินค้า: ' + err.message;
+                });
+        }
+
+        function renderFoodMenu(menuData) {
+            state.food.menuData = menuData;
+            document.getElementById('food-loading').classList.add('hidden');
+            document.getElementById('food-menu-section').classList.remove('hidden');
+
+            const container = document.getElementById('food-menu-container');
+            container.innerHTML = '';
+
+            if (menuData.length === 0) {
+                container.innerHTML = '<p class="text-center p-6 text-gray-500 bg-white rounded-lg shadow">ขออภัยค่ะ ไม่มีรายการอาหารพร้อมขายในขณะนี้</p>';
+            } else {
+                menuData.forEach(item => {
+                    const itemHtml = `
+                        <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
+                            <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
+                                <p class="text-green-600 font-bold text-xl mt-1">${item.price} บาท</p>
+                            </div>
+                            <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
+                                <button onclick="updateCart('food', '${item.id}', -1)" class="w-8 h-8 rounded-full bg-white font-bold text-lg shadow">-</button>
+                                <span id="qty-food-${item.id}" class="font-bold text-lg w-7 text-center">0</span>
+                                <button onclick="updateCart('food', '${item.id}', 1)" class="w-8 h-8 rounded-full bg-green-500 text-white font-bold text-lg shadow">+</button>
+                            </div>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+
+            maybeResumeCheckout('food');
+        }
+
+        function renderNwMenu(menuData) {
+            state.nw.menuData = menuData;
+            document.getElementById('nw-loading').classList.add('hidden');
+            document.getElementById('nw-menu-section').classList.remove('hidden');
+
+            const container = document.getElementById('nw-menu-container');
+            container.innerHTML = '';
+
+            if (menuData.length === 0) {
+                container.innerHTML = '<p class="text-center p-6 text-gray-500 bg-white rounded-lg shadow">ขออภัยค่ะ ยังไม่มีสินค้าแห้งพร้อมขายในขณะนี้</p>';
+            } else {
+                menuData.forEach(item => {
+                    const itemHtml = `
+                        <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
+                            <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
+                                <p class="text-blue-600 font-bold text-xl mt-1">${item.price} บาท</p>
+                            </div>
+                            <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
+                                <button onclick="updateCart('nw', '${item.id}', -1)" class="w-8 h-8 rounded-full bg-white font-bold text-lg shadow">-</button>
+                                <span id="qty-nw-${item.id}" class="font-bold text-lg w-7 text-center">0</span>
+                                <button onclick="updateCart('nw', '${item.id}', 1)" class="w-8 h-8 rounded-full bg-blue-500 text-white font-bold text-lg shadow">+</button>
+                            </div>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', itemHtml);
+                });
+            }
+
+            maybeResumeCheckout('nw');
+        }
+
+        // ---------------- LIFF: เรียกแบบ lazy ตอนกดเช็กเอาต์เท่านั้น ----------------
+
+        function ensureLiffInit() {
+            if (!liffInitPromise) {
+                liffInitPromise = liff.init({ liffId: MY_LIFF_ID });
+            }
+            return liffInitPromise;
+        }
+
+        // กันไม่ให้ค้างตลอดไปถ้า liff.init() ไม่ resolve/reject เลย (เช่น ปัญหาเน็ตเวิร์กหรือ config)
+        function withTimeout(promise, ms, timeoutMessage) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error(timeoutMessage)), ms))
+            ]);
+        }
+
+        // ธงยกเลิก ใช้กันไม่ให้ผลลัพธ์ที่มาช้าหลังกดยกเลิกไปแล้ว ดันมาเปิดฟอร์มขึ้นมาเอง
+        const checkoutCancelled = { food: false, nw: false };
+
+        function cancelCheckout(type) {
+            checkoutCancelled[type] = true;
+            resetCheckoutButton(type);
+        }
+
+        // เซฟตะกร้า+แท็บปัจจุบันไว้ก่อน redirect ไปหน้า LINE login (เพราะ external browser จะรีเฟรชหน้าทิ้ง state ทั้งหมด)
+        function saveCheckoutState(type) {
+            try {
+                sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify({ type: type, cart: state[type].cart }));
+            } catch (err) { /* ignore storage errors */ }
+        }
+
+        function restoreCart(type, cart) {
+            state[type].cart = cart || {};
+            Object.keys(state[type].cart).forEach((itemId) => {
+                const el = document.getElementById(`qty-${type}-${itemId}`);
+                if (el) el.innerText = state[type].cart[itemId];
+            });
+            calculateTotal(type);
+        }
+
+        async function maybeResumeCheckout(type) {
+            if (!pendingResume || pendingResume.type !== type) return;
+            const cart = pendingResume.cart;
+            pendingResume = null;
+            restoreCart(type, cart);
+
+            try {
+                await withTimeout(ensureLiffInit(), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป');
+            } catch (err) {
+                return; // เชื่อมต่อ LIFF ไม่สำเร็จ ปล่อยให้ผู้ใช้กดเช็กเอาต์เองอีกครั้ง
+            }
+            if (!liff.isLoggedIn()) return; // login ยังไม่สำเร็จจริง ไม่ต้องทำอะไรต่อ
+
+            await continueCheckout(type);
+        }
+
+        // ---------------- เช็กเอาต์: ล็อกอิน LINE + (เฉพาะอาหาร) verify กทม. ----------------
+
+        async function proceedToCheckout(type) {
+            checkoutCancelled[type] = false;
+            const btnNext = document.getElementById('btn-next-' + type);
+            const btnCancel = document.getElementById('btn-cancel-' + type);
+            btnNext.disabled = true;
+            btnNext.innerText = 'กำลังตรวจสอบ...';
+            btnCancel.classList.remove('hidden');
+
+            try {
+                await withTimeout(ensureLiffInit(), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
+            } catch (err) {
+                if (checkoutCancelled[type]) return;
+                resetCheckoutButton(type);
+                alert('เชื่อมต่อ LINE ไม่สำเร็จ: ' + err.message);
+                return;
+            }
+            if (checkoutCancelled[type]) return;
+
+            if (!liff.isLoggedIn()) {
+                if (!liff.isInClient()) {
+                    // เปิดนอกแอป LINE (เบราว์เซอร์ปกติ) - หน้าเว็บของ Apps Script ถูกฝังใน iframe
+                    // แบบ sandbox เสมอ ทำให้หน้า login ของ LINE ปฏิเสธไม่ยอมให้แสดงผลอยู่ดี
+                    // ไม่ว่าจะปรับ redirectUri ยังไงก็ตาม จึงให้ดูสินค้าต่อได้ แต่ต้องสั่งซื้อผ่านแอป LINE เท่านั้น
+                    resetCheckoutButton(type);
+                    showOpenInLineNotice();
+                    return;
+                }
+                // อยู่ในแอป LINE จริงแต่ isLoggedIn ยังเป็น false (ไม่ค่อยเกิด) - ล็อกอินผ่าน native bridge ของแอป ไม่ผ่านการ redirect หน้าเว็บ จึงไม่ติดปัญหา iframe
+                saveCheckoutState(type);
+                liff.login();
+                return; // หน้าเว็บจะ redirect ออกไป
+            }
+
+            await continueCheckout(type);
+        }
+
+        function showOpenInLineNotice() {
+            document.getElementById('open-in-line-notice').classList.remove('hidden');
+        }
+
+        async function continueCheckout(type) {
+            try {
+                if (!profile.userId) {
+                    profile = await liff.getProfile();
+                }
+            } catch (err) {
+                if (checkoutCancelled[type]) return;
+                resetCheckoutButton(type);
+                alert('ดึงข้อมูลโปรไฟล์ LINE ไม่สำเร็จ: ' + err.message);
+                return;
+            }
+            if (checkoutCancelled[type]) return;
+
+            if (type === 'food') {
+                callApi('verifyBkkUser', { userId: profile.userId })
+                    .then((result) => {
+                        if (checkoutCancelled.food) return;
+                        bkkVerification = result;
+                        resetCheckoutButton('food');
+                        if (result.isBkk) {
+                            document.getElementById('food-address').value = result.address || '';
+                            showOrderForm('food');
+                        } else {
+                            showFoodBlocked(result.message);
+                        }
+                    })
+                    .catch((err) => {
+                        if (checkoutCancelled.food) return;
+                        resetCheckoutButton('food');
+                        alert('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ' + err.message);
+                    });
+            } else {
+                callApi('getCustomerProfile', { userId: profile.userId })
+                    .then((customerProfile) => {
+                        if (checkoutCancelled.nw) return;
+                        if (customerProfile) {
+                            document.getElementById('nw-fullname').value = customerProfile.name || '';
+                            document.getElementById('nw-phone').value = customerProfile.phone || '';
+                            document.getElementById('nw-address').value = customerProfile.address || '';
+                        }
+                        resetCheckoutButton('nw');
+                        showOrderForm('nw');
+                    })
+                    .catch(() => {
+                        // โหลดข้อมูลลูกค้าเก่าไม่สำเร็จ ไม่ต้องบล็อก ให้กรอกเองได้ตามปกติ
+                        if (checkoutCancelled.nw) return;
+                        resetCheckoutButton('nw');
+                        showOrderForm('nw');
+                    });
+            }
+        }
+
+        function resetCheckoutButton(type) {
+            const btnNext = document.getElementById('btn-next-' + type);
+            const btnCancel = document.getElementById('btn-cancel-' + type);
+            btnNext.disabled = false;
+            btnNext.innerText = 'ยืนยันออเดอร์';
+            btnCancel.classList.add('hidden');
+        }
+
+        function showFoodBlocked(message) {
+            document.getElementById('food-menu-section').classList.add('hidden');
+            document.getElementById('food-blocked').classList.remove('hidden');
+            document.getElementById('food-blocked-msg').innerText = message;
+        }
+
+        async function finalSubmitFood(e) {
+            e.preventDefault();
+
+            const btnSubmit = document.getElementById('btn-submit-food');
+            btnSubmit.innerText = 'กำลังส่งออเดอร์...';
+            btnSubmit.disabled = true;
+
+            const address = document.getElementById('food-address').value;
+            const slipFile = document.getElementById('food-slip').files[0];
+            const totalPrice = document.getElementById('total-price-food').innerText;
+
+            const itemsOrdered = [];
+            state.food.menuData.forEach(item => {
+                if (state.food.cart[item.id] > 0) {
+                    itemsOrdered.push({ name: item.name, qty: state.food.cart[item.id] });
+                }
+            });
+
+            const orderData = {
+                userId: profile.userId,
+                fullname: bkkVerification.fullname,
+                phone: bkkVerification.phone,
+                address: address,
+                items: itemsOrdered,
+                totalPrice: totalPrice
+            };
+
+            try {
+                const slipBase64 = await getBase64(slipFile);
+                const slipName = `${bkkVerification.fullname.replace(/ /g,'_')}_${new Date().getTime()}.png`;
+
+                callApi('submitOrder', { orderData: orderData, slipBase64: slipBase64, slipName: slipName })
+                    .then((res) => {
+                        if (res.success) {
+                            document.getElementById('food-order-section').classList.add('hidden');
+                            document.getElementById('food-rider-order-id').innerText = 'ออเดอร์: ' + res.orderId;
+                            document.getElementById('food-rider-pickup').innerText = foodSettings ? foodSettings.pickupAddress : '-';
+                            document.getElementById('food-rider-dropoff').innerText = address;
+                            document.getElementById('food-rider-section').classList.remove('hidden');
+                            window.scrollTo(0, 0);
+                        } else {
+                            alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + res.error);
+                            btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                            btnSubmit.disabled = false;
+                        }
+                    })
+                    .catch((err) => {
+                        alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + err.message);
+                        btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                        btnSubmit.disabled = false;
+                    });
+
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการจัดการไฟล์สลิป: ' + err);
+                btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                btnSubmit.disabled = false;
+            }
+        }
+
+        async function finalSubmitNw(e) {
+            e.preventDefault();
+
+            const btnSubmit = document.getElementById('btn-submit-nw');
+            const paymentMethod = document.querySelector('input[name="nw-payment-method"]:checked').value;
+            const fullname = document.getElementById('nw-fullname').value.trim();
+            const phone = document.getElementById('nw-phone').value.trim();
+            const address = document.getElementById('nw-address').value;
+            const slipFile = document.getElementById('nw-slip').files[0];
+            const totalPrice = document.getElementById('total-price-nw').innerText;
+
+            if (paymentMethod === 'transfer' && !slipFile) {
+                alert('กรุณาแนบสลิปโอนเงินก่อนสั่งซื้อค่ะ');
+                return;
+            }
+
+            btnSubmit.innerText = 'กำลังส่งออเดอร์...';
+            btnSubmit.disabled = true;
+
+            const itemsOrdered = [];
+            state.nw.menuData.forEach(item => {
+                if (state.nw.cart[item.id] > 0) {
+                    itemsOrdered.push({ name: item.name, qty: state.nw.cart[item.id] });
+                }
+            });
+
+            const shippingFee = paymentMethod === 'cod' && nwPaymentSettings ? nwPaymentSettings.codShippingFee : 0;
+
+            const orderData = {
+                userId: profile.userId,
+                fullname: fullname,
+                phone: phone,
+                address: address,
+                items: itemsOrdered,
+                totalPrice: totalPrice,
+                paymentMethod: paymentMethod,
+                shippingFee: shippingFee
+            };
+
+            try {
+                const slipBase64 = slipFile ? await getBase64(slipFile) : null;
+                const slipName = slipFile ? `${fullname.replace(/ /g,'_')}_${new Date().getTime()}.png` : null;
+
+                callApi('submitNationwideOrder', { orderData: orderData, slipBase64: slipBase64, slipName: slipName })
+                    .then((res) => {
+                        if (res.success) {
+                            const msg = paymentMethod === 'cod'
+                                ? `สั่งซื้อสำเร็จ! 🙏 ออเดอร์คือ ${res.orderId}\n\nชำระเงินสดกับไรเดอร์/พนักงานขนส่งตอนรับพัสดุนะคะ แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุค่ะ`
+                                : `สั่งซื้อสำเร็จ! 🙏 ออเดอร์คือ ${res.orderId}\n\nแอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ`;
+                            alert(msg);
+                            liff.closeWindow();
+                        } else {
+                            alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + res.error);
+                            btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                            btnSubmit.disabled = false;
+                        }
+                    })
+                    .catch((err) => {
+                        alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + err.message);
+                        btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                        btnSubmit.disabled = false;
+                    });
+
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการจัดการไฟล์สลิป: ' + err);
+                btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                btnSubmit.disabled = false;
+            }
+        }
+
+        // ---------------- ตะกร้าสินค้า (ใช้ร่วมกันทั้ง 2 แท็บ) ----------------
+
+        function updateCart(type, itemId, change) {
+            const s = state[type];
+            if (!s.cart[itemId]) s.cart[itemId] = 0;
+            s.cart[itemId] += change;
+            if (s.cart[itemId] < 0) s.cart[itemId] = 0;
+
+            document.getElementById(`qty-${type}-${itemId}`).innerText = s.cart[itemId];
+            calculateTotal(type);
+        }
+
+        function calculateTotal(type) {
+            const s = state[type];
+            let total = 0;
+            let hasItems = false;
+            s.menuData.forEach(item => {
+                if (s.cart[item.id] > 0) {
+                    total += item.price * s.cart[item.id];
+                    hasItems = true;
+                }
+            });
+
+            document.getElementById('total-price-' + type).innerText = total.toLocaleString();
+            const btnNext = document.getElementById('btn-next-' + type);
+            const activeColor = type === 'food' ? 'bg-green-600' : 'bg-blue-600';
+            if (hasItems) {
+                btnNext.disabled = false;
+                btnNext.classList.remove('bg-gray-400');
+                btnNext.classList.add(activeColor);
+            } else {
+                btnNext.disabled = true;
+                btnNext.classList.remove(activeColor);
+                btnNext.classList.add('bg-gray-400');
+            }
+        }
+
+        function showOrderForm(type) {
+            document.getElementById(type === 'food' ? 'food-menu-section' : 'nw-menu-section').classList.add('hidden');
+            document.getElementById(type === 'food' ? 'food-order-section' : 'nw-order-section').classList.remove('hidden');
+            const total = document.getElementById('total-price-' + type).innerText;
+            document.querySelectorAll('.final-total-' + type).forEach(el => el.innerText = total);
+            if (type === 'nw') updateNwPaymentUI();
+            window.scrollTo(0, 0);
+        }
+
+        function backToMenu(type) {
+            document.getElementById(type === 'food' ? 'food-order-section' : 'nw-order-section').classList.add('hidden');
+            document.getElementById(type === 'food' ? 'food-menu-section' : 'nw-menu-section').classList.remove('hidden');
+        }
+
+        // แปลงไฟล์รูปภาพเป็น Base64
+        const getBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        // เริ่มต้นทำงาน
+        main();
+    </script>
+</body>
+</html>
