@@ -2,6 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Yateem Market - สั่งอาหาร & สินค้าแห้ง</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -22,10 +23,10 @@
         <!-- สลับโหมด: อาหาร (ตามวัน/เวลาที่แอดมินตั้งไว้) / สินค้าแห้ง (ทุกวัน 24 ชม.) -->
         <div id="tabs" class="flex gap-2 mb-4">
             <button id="tab-btn-food" onclick="switchTab('food')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
-                🍲 Yateem Kitchen<br><span id="food-tab-subtext" class="text-xs font-normal">กำลังโหลด...</span>
+                🍲 Yateem Kitchen<br><span id="food-tab-subtext" class="text-sm font-normal">กำลังโหลด...</span>
             </button>
             <button id="tab-btn-nw" onclick="switchTab('nw')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
-                📦 สั่งซื้อสินค้าจากยาตีมทีวี<br><span class="text-xs font-normal">ส่งทั่วประเทศ • เปิดตลอด 24 ชม.</span>
+                📦 สั่งซื้อสินค้าจากยาตีมทีวี<br><span class="text-sm font-normal">ส่งทั่วประเทศ • เปิดตลอด 24 ชม.</span>
             </button>
         </div>
 
@@ -76,9 +77,11 @@
                     </div>
 
                     <div class="mb-6 p-4 border border-dashed border-green-500 rounded-lg text-center bg-green-50">
-                        <p class="text-sm text-green-700 font-bold mb-2">ช่องทางชำระเงิน ( PromptPay QR )</p>
-                        <img src="https://via.placeholder.com/200x200.png?text=PromptPay+QR" alt="PromptPay QR สถานี" class="mx-auto w-40 h-40 mb-2">
-                        <p class="text-xs text-gray-500">ชื่อบัญชี: สถานี Yateem TV</p>
+                        <p class="text-sm text-green-700 font-bold mb-2">ช่องทางชำระเงิน ( พร้อมเพย์ )</p>
+                        <img id="food-qr-image" src="" alt="QR พร้อมเพย์" class="mx-auto w-40 h-40 mb-2 object-contain hidden">
+                        <p class="text-sm text-gray-700">ชื่อบัญชี: <span id="food-bank-account-name" class="font-bold">-</span></p>
+                        <p class="text-sm text-gray-700">ธนาคาร: <span id="food-bank-name" class="font-bold">-</span></p>
+                        <p class="text-sm text-gray-700">เลขที่บัญชี: <span id="food-bank-account-number" class="font-bold">-</span></p>
                         <p class="text-sm font-bold text-gray-700 mt-2">ยอดเงินที่ต้องโอน: <span class="final-total-food text-xl text-green-600">0</span> บาท</p>
                         <p class="text-xs text-red-500 mt-1">*โอนเฉพาะค่าอาหารเท่านั้น ค่าส่งจ่ายไรเดอร์ในแอปค่ะ</p>
                     </div>
@@ -109,9 +112,9 @@
                 <p class="text-xs text-gray-500 mb-4">*กดเปิดแอปแล้วกรอกจุดรับ-ส่งด้านบนเองในแอปได้เลยค่ะ (แอปขนส่งยังไม่รองรับการกรอกที่อยู่ให้อัตโนมัติ)</p>
 
                 <div class="space-y-2">
-                    <a href="grab://open?screen=express" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress</a>
-                    <a href="https://lineman.onelink.me/1Nnr/lineman" target="_blank" class="block w-full text-center bg-green-500 text-white font-bold py-3 rounded-lg shadow hover:bg-green-600">เรียก LINE MAN Messenger</a>
-                    <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-3 rounded-lg shadow hover:bg-blue-700">เรียก Bolt Send Package</a>
+                    <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งพัสดุ)</a>
+                    <a href="https://lineman.onelink.me/1Nnr/messenger" target="_blank" class="block w-full text-center bg-green-500 text-white font-bold py-3 rounded-lg shadow hover:bg-green-600">เรียก LINE MAN Messenger (ส่งพัสดุ)</a>
+                    <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-3 rounded-lg shadow hover:bg-blue-700">เรียก Bolt (เลือกเมนูส่งพัสดุในแอป)</a>
                 </div>
 
                 <button onclick="liff.closeWindow()" class="mt-5 w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
@@ -192,6 +195,7 @@
 
                     <div id="nw-transfer-block" class="mb-6 p-4 border border-dashed border-blue-500 rounded-lg text-center bg-blue-50">
                         <p class="text-sm text-blue-700 font-bold mb-2">🏦 โอนเงิน (จัดส่งฟรี)</p>
+                        <img id="nw-qr-image" src="" alt="QR พร้อมเพย์" class="mx-auto w-40 h-40 mb-2 object-contain hidden">
                         <p class="text-sm text-gray-700">ชื่อบัญชี: <span id="nw-bank-account-name" class="font-bold">-</span></p>
                         <p class="text-sm text-gray-700">ธนาคาร: <span id="nw-bank-name" class="font-bold">-</span></p>
                         <p class="text-sm text-gray-700">เลขที่บัญชี: <span id="nw-bank-account-number" class="font-bold">-</span></p>
@@ -317,9 +321,21 @@
         }
 
         function applyNwPaymentSettingsToUI(settings) {
+            // ใช้ค่าตั้งค่าเดียวกันนี้ทั้งช่องทางชำระเงินของแท็บอาหารและแท็บสินค้าแห้ง
             document.getElementById('nw-bank-account-name').innerText = settings.bankAccountName;
             document.getElementById('nw-bank-name').innerText = settings.bankName;
             document.getElementById('nw-bank-account-number').innerText = settings.bankAccountNumber;
+
+            document.getElementById('food-bank-account-name').innerText = settings.bankAccountName;
+            document.getElementById('food-bank-name').innerText = settings.bankName;
+            document.getElementById('food-bank-account-number').innerText = settings.bankAccountNumber;
+
+            if (settings.qrCodeImageUrl) {
+                document.getElementById('nw-qr-image').src = settings.qrCodeImageUrl;
+                document.getElementById('nw-qr-image').classList.remove('hidden');
+                document.getElementById('food-qr-image').src = settings.qrCodeImageUrl;
+                document.getElementById('food-qr-image').classList.remove('hidden');
+            }
         }
 
         function updateNwPaymentUI() {
