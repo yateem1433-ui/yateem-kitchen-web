@@ -173,10 +173,15 @@
             const container = document.getElementById('orders-list');
             container.innerHTML = '';
 
-            res.orders.forEach((order) => {
+            // ออเดอร์ที่ยังไม่กดรับสินค้าขึ้นก่อน (เรียงใหม่สุดก่อนตามที่ backend ส่งมา) ตามด้วยออเดอร์ที่รับแล้วไว้ล่างสุด
+            const activeOrders = res.orders.filter((order) => !order.receivedStatus);
+            const doneOrders = res.orders.filter((order) => order.receivedStatus);
+            const orderedList = activeOrders.concat(doneOrders);
+
+            orderedList.forEach((order) => {
                 ordersById[order.orderId] = order;
                 container.insertAdjacentHTML('beforeend', buildOrderCard(order));
-                if (order.lightStatus === 'green' && order.type === 'food') {
+                if (order.lightStatus === 'green' && order.type === 'food' && !order.receivedStatus) {
                     fillRiderAddresses(order);
                 }
             });
@@ -201,7 +206,7 @@
                    </div>`
                 : '';
 
-            const riderBlock = (lightStatus === 'green' && order.type === 'food')
+            const riderBlock = (lightStatus === 'green' && order.type === 'food' && !order.receivedStatus)
                 ? `<div id="rider-call-${sid}" class="mb-3">
                     <div class="text-left bg-gray-50 rounded-lg p-3 mb-2 text-sm">
                         <p class="font-bold text-gray-700">📍 จุดรับอาหาร (ต้นทาง)</p>
@@ -218,12 +223,12 @@
                 : '';
 
             const receivedBlock = order.receivedStatus
-                ? `<div class="flex items-center justify-center gap-2 bg-green-50 border border-green-300 rounded-lg py-3 mb-2">
-                    <span class="text-3xl leading-none text-green-600">✅</span>
-                    <span class="font-bold text-green-700">ได้รับสินค้าแล้ว</span>
+                ? `<div class="flex items-center justify-center gap-2 bg-gray-100 border border-gray-300 rounded-lg py-3 mb-2">
+                    <span class="text-3xl leading-none text-gray-500">✅</span>
+                    <span class="font-bold text-gray-500">ได้รับสินค้าแล้ว</span>
                    </div>`
                 : (lightStatus === 'green'
-                    ? `<button onclick="confirmReceived('${order.type}', '${order.orderId}')" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">✅ ได้รับสินค้าแล้ว</button>`
+                    ? `<button onclick="confirmReceived('${order.type}', '${order.orderId}')" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">✅ กดเมื่อได้รับสินค้าแล้วเท่านั้น</button>`
                     : '');
 
             const claimBlock = order.claim
@@ -233,8 +238,10 @@
                    </div>`
                 : `<button onclick="openClaimModal('${order.type}', '${order.orderId}')" class="w-full bg-white text-red-600 font-bold py-2.5 rounded-lg border border-red-300 hover:bg-red-50">⚠️ แจ้งปัญหา/เคลมสินค้า</button>`;
 
+            const cardStyle = order.receivedStatus ? ' style="filter: grayscale(1); opacity: 0.65;"' : '';
+
             return `
-                <div class="border rounded-lg p-4">
+                <div class="border rounded-lg p-4"${cardStyle}>
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <p class="text-xs text-gray-500">${order.type === 'food' ? '🍲 อาหาร' : '📦 สินค้าแห้ง'}</p>
