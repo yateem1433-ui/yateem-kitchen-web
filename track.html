@@ -28,8 +28,13 @@
 
         <div id="status-container" class="hidden p-6">
             <div class="mb-6 pb-4 border-b border-gray-200">
-                <p class="text-sm text-gray-500">หมายเลขออเดอร์</p>
-                <h2 id="order-id" class="text-xl font-bold text-gray-800">YTK-XXXXX</h2>
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-sm text-gray-500">หมายเลขออเดอร์</p>
+                        <h2 id="order-id" class="text-xl font-bold text-gray-800">YTK-XXXXX</h2>
+                    </div>
+                    <p id="last-updated" class="text-xs text-gray-400 mt-1"></p>
+                </div>
                 <p id="order-items" class="text-sm text-gray-600 mt-2">รายการอาหาร...</p>
             </div>
 
@@ -69,6 +74,7 @@
                 </div>
             </div>
 
+            <a href="index.html" class="block w-full text-center bg-gray-100 text-gray-700 font-bold py-3 rounded-lg mb-2 border border-gray-300">← กลับหน้าหลัก</a>
             <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
         </div>
     </div>
@@ -131,9 +137,22 @@
                 return;
             }
 
-            callApi('getLatestOrder', { userId: profile.userId })
-                .then(showStatus)
-                .catch((err) => showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message));
+            currentUserId = profile.userId;
+            refreshStatus(true);
+            pollTimer = setInterval(() => refreshStatus(false), POLL_INTERVAL_MS);
+        }
+
+        let currentUserId = null;
+        let pollTimer = null;
+        const POLL_INTERVAL_MS = 15000;
+
+        function refreshStatus(isFirstLoad) {
+            callApi('getLatestOrder', { userId: currentUserId })
+                .then((res) => showStatus(res, isFirstLoad))
+                .catch((err) => {
+                    if (isFirstLoad) showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message);
+                    // โพลรอบถัดไปพลาด ไม่ต้องรบกวนลูกค้าด้วย error เต็มจอ รอรอบถัดไปแทน
+                });
         }
 
         const LIGHT_LABELS = {
@@ -142,17 +161,20 @@
             green: 'พร้อมจัดส่งแล้ว! 🎉'
         };
 
-        function showStatus(res) {
+        let pickupAddressCache = null;
+
+        function showStatus(res, isFirstLoad) {
             document.getElementById('loading').classList.add('hidden');
 
             if (!res.success) {
-                showError(res.message);
+                if (isFirstLoad) showError(res.message);
                 return;
             }
 
             document.getElementById('status-container').classList.remove('hidden');
             document.getElementById('order-id').innerText = res.orderId;
             document.getElementById('order-items').innerText = res.items;
+            document.getElementById('last-updated').innerText = 'อัพเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             const lightStatus = res.lightStatus || 'red';
             ['red', 'yellow', 'green'].forEach((color) => {
@@ -168,17 +190,26 @@
                     document.getElementById('tracking-image-link').href = res.trackingImageUrl;
                     document.getElementById('tracking-image-link').classList.remove('hidden');
                 }
+            } else {
+                document.getElementById('tracking-info').classList.add('hidden');
             }
 
             // ให้เรียกไรเดอร์ได้เฉพาะตอนออเดอร์อาหารพร้อมจัดส่งแล้ว (สินค้าแห้งลูกค้าไม่ต้องเรียกไรเดอร์เอง)
             if (lightStatus === 'green' && res.type === 'food') {
                 document.getElementById('rider-dropoff').innerText = res.address || '-';
                 document.getElementById('rider-call-section').classList.remove('hidden');
-                callApi('getFoodSettings')
-                    .then((settings) => {
-                        document.getElementById('rider-pickup').innerText = settings.pickupAddress || '-';
-                    })
-                    .catch(() => { /* ถ้าดึงที่อยู่จุดรับไม่สำเร็จ ปล่อยเป็น "-" ไว้ ไม่บล็อกการแสดงผล */ });
+                if (pickupAddressCache) {
+                    document.getElementById('rider-pickup').innerText = pickupAddressCache;
+                } else {
+                    callApi('getFoodSettings')
+                        .then((settings) => {
+                            pickupAddressCache = settings.pickupAddress || '-';
+                            document.getElementById('rider-pickup').innerText = pickupAddressCache;
+                        })
+                        .catch(() => { /* ถ้าดึงที่อยู่จุดรับไม่สำเร็จ ปล่อยเป็น "-" ไว้ ไม่บล็อกการแสดงผล */ });
+                }
+            } else {
+                document.getElementById('rider-call-section').classList.add('hidden');
             }
         }
 

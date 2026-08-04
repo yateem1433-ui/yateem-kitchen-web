@@ -18,6 +18,7 @@
             <img src="https://drive.google.com/thumbnail?id=13K6Z1B92MB6UsGCJZsggaHGRGo8baili&sz=w200" alt="Yateem TV" class="w-16 h-16 mx-auto mb-2 rounded-full">
             <h1 class="text-2xl font-bold text-blue-800">Yateem Market</h1>
             <p class="text-sm text-amber-600 font-semibold">ทุกการซื้อคือการให้</p>
+            <a href="track.html" class="inline-block mt-3 text-sm font-bold text-blue-600 underline">🔍 เช็คสถานะออเดอร์ของฉัน</a>
         </div>
 
         <!-- สลับโหมด: อาหาร (ตามวัน/เวลาที่แอดมินตั้งไว้) / สินค้าแห้ง (ทุกวัน 24 ชม.) -->
@@ -199,6 +200,15 @@
                         <button type="submit" id="btn-submit-nw" class="w-2/3 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">แจ้งโอน & สั่งซื้อ</button>
                     </div>
                 </form>
+            </div>
+
+            <div id="nw-order-success" class="hidden bg-white p-6 rounded-lg shadow mb-6 text-center">
+                <p class="text-5xl mb-3">🙏</p>
+                <h2 class="text-xl font-bold text-blue-700 mb-2">สั่งซื้อสำเร็จ!</h2>
+                <p id="nw-success-order-id" class="text-sm text-gray-500 mb-4"></p>
+                <p id="nw-success-message" class="text-gray-600 leading-relaxed mb-6"></p>
+                <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
+                <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
             </div>
         </div>
 
@@ -722,10 +732,13 @@
                     .then((res) => {
                         if (res.success) {
                             const msg = paymentMethod === 'cod'
-                                ? `สั่งซื้อสำเร็จ! 🙏 ออเดอร์คือ ${res.orderId}\n\nชำระเงินสดกับไรเดอร์/พนักงานขนส่งตอนรับพัสดุนะคะ แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุค่ะ`
-                                : `สั่งซื้อสำเร็จ! 🙏 ออเดอร์คือ ${res.orderId}\n\nแอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ`;
-                            alert(msg);
-                            liff.closeWindow();
+                                ? 'ชำระเงินสดกับไรเดอร์/พนักงานขนส่งตอนรับพัสดุนะคะ แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุค่ะ'
+                                : 'แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ';
+                            document.getElementById('nw-order-section').classList.add('hidden');
+                            document.getElementById('nw-success-order-id').innerText = 'ออเดอร์: ' + res.orderId;
+                            document.getElementById('nw-success-message').innerText = msg;
+                            document.getElementById('nw-order-success').classList.remove('hidden');
+                            window.scrollTo(0, 0);
                         } else {
                             alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + res.error);
                             btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
