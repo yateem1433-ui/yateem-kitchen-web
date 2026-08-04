@@ -33,16 +33,43 @@
                 <p id="order-items" class="text-sm text-gray-600 mt-2">รายการอาหาร...</p>
             </div>
 
-            <div class="relative pl-6 border-l-2 border-blue-500 space-y-6">
-                <div class="relative">
-                    <div class="absolute -left-8 bg-blue-500 w-4 h-4 rounded-full border-4 border-white"></div>
-                    <h3 class="text-lg font-bold text-blue-600">สถานะล่าสุด</h3>
-                    <p id="order-status" class="text-2xl font-black text-gray-800 mt-1">กำลังตรวจสอบ</p>
-                    <p class="text-xs text-gray-500 mt-1">*เมื่อสถานะเปลี่ยนเป็น "รอไรเดอร์" ให้ลูกค้ากเรียกรถได้เลยค่ะ</p>
+            <div class="flex items-center justify-center gap-6 mb-4">
+                <div class="text-center">
+                    <div id="light-red" class="w-10 h-10 rounded-full bg-red-500 mx-auto mb-1 border-4 border-transparent"></div>
+                    <p class="text-xs text-gray-500">รับออเดอร์</p>
+                </div>
+                <div class="text-center">
+                    <div id="light-yellow" class="w-10 h-10 rounded-full bg-yellow-400 mx-auto mb-1 border-4 border-transparent"></div>
+                    <p class="text-xs text-gray-500">กำลังเตรียม</p>
+                </div>
+                <div class="text-center">
+                    <div id="light-green" class="w-10 h-10 rounded-full bg-green-500 mx-auto mb-1 border-4 border-transparent"></div>
+                    <p class="text-xs text-gray-500">พร้อมจัดส่ง</p>
+                </div>
+            </div>
+            <p id="order-status-label" class="text-center text-xl font-black text-gray-800 mb-4">กำลังตรวจสอบ</p>
+
+            <div id="tracking-info" class="hidden bg-gray-50 rounded-lg p-3 mb-4 text-center">
+                <p class="text-xs text-gray-500">เลขพัสดุ</p>
+                <p id="tracking-number-display" class="font-bold text-gray-800 mb-1">-</p>
+                <a id="tracking-image-link" href="#" target="_blank" class="hidden text-xs text-blue-600 underline">ดูรูปเลขพัสดุ</a>
+            </div>
+
+            <div id="rider-call-section" class="hidden">
+                <div class="text-left bg-gray-50 rounded-lg p-4 mb-2 text-sm">
+                    <p class="font-bold text-gray-700">📍 จุดรับอาหาร (ต้นทาง)</p>
+                    <p id="rider-pickup" class="text-gray-600 mb-2">-</p>
+                    <p class="font-bold text-gray-700">🏠 จุดส่ง (ที่อยู่ของคุณ)</p>
+                    <p id="rider-dropoff" class="text-gray-600">-</p>
+                </div>
+                <p class="text-xs text-gray-500 mb-4">*กดเปิดแอปแล้วกรอกจุดรับ-ส่งด้านบนเองในแอปได้เลยค่ะ (แอปขนส่งยังไม่รองรับการกรอกที่อยู่ให้อัตโนมัติ)</p>
+                <div class="space-y-2 mb-4">
+                    <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งพัสดุ)</a>
+                    <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-3 rounded-lg shadow hover:bg-blue-700">เรียก Bolt (เลือกเมนูส่งพัสดุในแอป)</a>
                 </div>
             </div>
 
-            <button onclick="liff.closeWindow()" class="mt-8 w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+            <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
         </div>
     </div>
 
@@ -109,16 +136,49 @@
                 .catch((err) => showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message));
         }
 
+        const LIGHT_LABELS = {
+            red: 'รับออเดอร์แล้ว กำลังรอครัว/แอดมินยืนยัน',
+            yellow: 'กำลังเตรียมอาหาร/สินค้าให้อยู่ค่ะ',
+            green: 'พร้อมจัดส่งแล้ว! 🎉'
+        };
+
         function showStatus(res) {
             document.getElementById('loading').classList.add('hidden');
 
-            if (res.success) {
-                document.getElementById('status-container').classList.remove('hidden');
-                document.getElementById('order-id').innerText = res.orderId;
-                document.getElementById('order-items').innerText = res.items;
-                document.getElementById('order-status').innerText = res.status;
-            } else {
+            if (!res.success) {
                 showError(res.message);
+                return;
+            }
+
+            document.getElementById('status-container').classList.remove('hidden');
+            document.getElementById('order-id').innerText = res.orderId;
+            document.getElementById('order-items').innerText = res.items;
+
+            const lightStatus = res.lightStatus || 'red';
+            ['red', 'yellow', 'green'].forEach((color) => {
+                document.getElementById('light-' + color).classList.toggle('border-gray-800', color === lightStatus);
+                document.getElementById('light-' + color).classList.toggle('border-transparent', color !== lightStatus);
+            });
+            document.getElementById('order-status-label').innerText = LIGHT_LABELS[lightStatus] || res.status;
+
+            if (res.trackingNumber || res.trackingImageUrl) {
+                document.getElementById('tracking-info').classList.remove('hidden');
+                document.getElementById('tracking-number-display').innerText = res.trackingNumber || '-';
+                if (res.trackingImageUrl) {
+                    document.getElementById('tracking-image-link').href = res.trackingImageUrl;
+                    document.getElementById('tracking-image-link').classList.remove('hidden');
+                }
+            }
+
+            // ให้เรียกไรเดอร์ได้เฉพาะตอนออเดอร์อาหารพร้อมจัดส่งแล้ว (สินค้าแห้งลูกค้าไม่ต้องเรียกไรเดอร์เอง)
+            if (lightStatus === 'green' && res.type === 'food') {
+                document.getElementById('rider-dropoff').innerText = res.address || '-';
+                document.getElementById('rider-call-section').classList.remove('hidden');
+                callApi('getFoodSettings')
+                    .then((settings) => {
+                        document.getElementById('rider-pickup').innerText = settings.pickupAddress || '-';
+                    })
+                    .catch(() => { /* ถ้าดึงที่อยู่จุดรับไม่สำเร็จ ปล่อยเป็น "-" ไว้ ไม่บล็อกการแสดงผล */ });
             }
         }
 

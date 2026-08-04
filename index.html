@@ -73,7 +73,7 @@
                     <div class="mb-5">
                         <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่งของคุณ (ปักหมุดบ้าน)*</label>
                         <textarea id="food-address" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500" rows="3" placeholder="กรุณากรอกที่อยู่ชัดเจน เพื่อให้ไรเดอร์มารับอาหารไปส่งได้ถูกค่ะ"></textarea>
-                        <p class="text-xs text-gray-500 mt-1">*ที่อยู่นี้จะเป็นจุดที่ลูกค้าปักหมุดเรียกไรเดอร์ในแอป (Grab/LINE MAN/Bolt)</p>
+                        <p class="text-xs text-gray-500 mt-1">*ที่อยู่นี้จะเป็นจุดที่ลูกค้าปักหมุดเรียกไรเดอร์ในแอป (Grab/Bolt) หลังแอดมินยืนยันออเดอร์แล้ว</p>
                     </div>
 
                     <div class="mb-6 p-4 border border-dashed border-green-500 rounded-lg text-center bg-green-50">
@@ -99,25 +99,12 @@
             </div>
 
             <div id="food-rider-section" class="hidden bg-white p-6 rounded-lg shadow mb-6 text-center">
-                <p class="text-5xl mb-3">🛵</p>
-                <h2 class="text-xl font-bold text-green-700 mb-2">สั่งซื้อสำเร็จ! เรียกไรเดอร์มารับอาหารได้เลย</h2>
+                <p class="text-5xl mb-3">🙏</p>
+                <h2 class="text-xl font-bold text-green-700 mb-2">สั่งซื้อสำเร็จ!</h2>
                 <p id="food-rider-order-id" class="text-sm text-gray-500 mb-4"></p>
-
-                <div class="text-left bg-gray-50 rounded-lg p-4 mb-2 text-sm">
-                    <p class="font-bold text-gray-700">📍 จุดรับอาหาร (ต้นทาง)</p>
-                    <p id="food-rider-pickup" class="text-gray-600 mb-2"></p>
-                    <p class="font-bold text-gray-700">🏠 จุดส่ง (ที่อยู่ของคุณ)</p>
-                    <p id="food-rider-dropoff" class="text-gray-600"></p>
-                </div>
-                <p class="text-xs text-gray-500 mb-4">*กดเปิดแอปแล้วกรอกจุดรับ-ส่งด้านบนเองในแอปได้เลยค่ะ (แอปขนส่งยังไม่รองรับการกรอกที่อยู่ให้อัตโนมัติ)</p>
-
-                <div class="space-y-2">
-                    <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งพัสดุ)</a>
-                    <a href="https://lineman.onelink.me/1Nnr/messenger" target="_blank" class="block w-full text-center bg-green-500 text-white font-bold py-3 rounded-lg shadow hover:bg-green-600">เรียก LINE MAN Messenger (ส่งพัสดุ)</a>
-                    <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-3 rounded-lg shadow hover:bg-blue-700">เรียก Bolt (เลือกเมนูส่งพัสดุในแอป)</a>
-                </div>
-
-                <button onclick="liff.closeWindow()" class="mt-5 w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+                <p class="text-gray-600 leading-relaxed mb-6">กรุณารอแอดมินจัดเตรียมออเดอร์สักครู่นะคะ 🙏<br>เมื่อพร้อมจัดส่งแล้ว จะมีปุ่มเรียกรถขึ้นในหน้าติดตามออเดอร์ให้เลยค่ะ</p>
+                <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
+                <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
             </div>
         </div>
 
@@ -667,8 +654,6 @@
                         if (res.success) {
                             document.getElementById('food-order-section').classList.add('hidden');
                             document.getElementById('food-rider-order-id').innerText = 'ออเดอร์: ' + res.orderId;
-                            document.getElementById('food-rider-pickup').innerText = foodSettings ? foodSettings.pickupAddress : '-';
-                            document.getElementById('food-rider-dropoff').innerText = address;
                             document.getElementById('food-rider-section').classList.remove('hidden');
                             window.scrollTo(0, 0);
                         } else {
