@@ -253,8 +253,9 @@
 
             res.orders.forEach((order) => { ordersById[order.orderId] = order; });
 
-            // แท็บ "กำลังดำเนินการ" - ออเดอร์ที่ยังไม่กดรับสินค้า
-            const activeOrders = res.orders.filter((order) => !order.receivedStatus);
+            // ออเดอร์ที่แจ้งเคลมแล้วให้ย้ายไปอยู่แท็บ "เคลม" อย่างเดียว ไม่ต้องโชว์ซ้ำในแท็บอื่นให้รก
+            // แท็บ "กำลังดำเนินการ" - ออเดอร์ที่ยังไม่กดรับสินค้า และยังไม่มีเรื่องเคลม
+            const activeOrders = res.orders.filter((order) => !order.receivedStatus && !order.claim);
             const activeContainer = document.getElementById('orders-list-active');
             activeContainer.innerHTML = '';
             document.getElementById('active-empty').classList.toggle('hidden', activeOrders.length > 0);
@@ -265,8 +266,8 @@
                 }
             });
 
-            // แท็บ "จัดส่งสมบูรณ์" - ออเดอร์ที่กดรับสินค้าแล้ว จัดกลุ่มตามวันที่รับ
-            const completedOrders = res.orders.filter((order) => order.receivedStatus);
+            // แท็บ "จัดส่งสมบูรณ์" - ออเดอร์ที่กดรับสินค้าแล้วและไม่มีเรื่องเคลมค้าง จัดกลุ่มตามวันที่รับ
+            const completedOrders = res.orders.filter((order) => order.receivedStatus && !order.claim);
             const completedContainer = document.getElementById('orders-list-completed');
             completedContainer.innerHTML = '';
             document.getElementById('completed-empty').classList.toggle('hidden', completedOrders.length > 0);
@@ -470,7 +471,8 @@
                 if (res.success) {
                     closeClaimModal();
                     alert('ส่งเรื่องเคลมเรียบร้อยแล้วค่ะ 🙏 แอดมินจะรีบตรวจสอบให้นะคะ');
-                    refreshOrders(false);
+                    // ออเดอร์นี้ย้ายไปแท็บ "เคลม" แล้ว - รอข้อมูลอัปเดตเสร็จก่อนค่อยพาไปดูที่แท็บนั้น
+                    refreshOrders(false).then(() => switchOrderTab('claims'));
                 } else {
                     alert('เกิดข้อผิดพลาด: ' + res.error);
                 }
