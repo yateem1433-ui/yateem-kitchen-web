@@ -186,7 +186,8 @@
         }
 
         function refreshOrders(isFirstLoad) {
-            callApi('getMyOrders', { userId: currentUserId })
+            // คืน promise ไว้ให้ผู้เรียก (เช่น confirmReceived) เอาไปต่อ .then() หลังข้อมูลอัปเดตเสร็จได้
+            return callApi('getMyOrders', { userId: currentUserId })
                 .then((res) => renderOrders(res, isFirstLoad))
                 .catch((err) => {
                     if (isFirstLoad) showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message);
@@ -401,8 +402,12 @@
             if (!confirm('ยืนยันว่าคุณได้รับสินค้าเรียบร้อยแล้วใช่ไหมคะ?')) return;
             callApi('markOrderReceived', { orderType: type, orderId: orderId })
                 .then((res) => {
-                    if (res.success) refreshOrders(false);
-                    else alert('เกิดข้อผิดพลาด: ' + res.error);
+                    if (res.success) {
+                        // โหลดข้อมูลใหม่ให้ครบก่อน (ออเดอร์นี้จะย้ายไปอยู่ในลิสต์ completed) แล้วค่อยพาไปแท็บ "จัดส่งสมบูรณ์" ให้เห็นเลย
+                        refreshOrders(false).then(() => switchOrderTab('completed'));
+                    } else {
+                        alert('เกิดข้อผิดพลาด: ' + res.error);
+                    }
                 })
                 .catch((err) => alert('เกิดข้อผิดพลาด: ' + err.message));
         }
