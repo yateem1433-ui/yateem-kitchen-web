@@ -38,21 +38,14 @@
                 <p>กำลังโหลดเมนู...</p>
             </div>
 
-            <div id="food-closed" class="hidden text-center bg-white p-8 rounded-lg shadow mb-6">
-                <p class="text-5xl mb-4">⏰</p>
-                <h2 class="text-xl font-bold text-gray-700 mb-3">ปิดขายเมนูอาหารอยู่ค่ะ</h2>
-                <p id="food-closed-note" class="text-gray-600 leading-relaxed">กำลังโหลดข้อมูลวัน/เวลาเปิดขาย...</p>
-                <button onclick="switchTab('nw')" class="mt-5 bg-blue-600 text-white font-bold px-6 py-2 rounded-full">สั่งสินค้าแห้งได้เลย (ส่งทั่วประเทศ 24 ชม.) →</button>
-            </div>
-
             <div id="food-blocked" class="hidden text-center bg-white p-8 rounded-lg shadow mb-6">
                 <p class="text-5xl mb-4">🚫</p>
                 <h2 class="text-xl font-bold text-red-600 mb-3">ขออภัยค่ะ 🙏</h2>
                 <p id="food-blocked-msg" class="text-gray-700 leading-relaxed"></p>
-                <p class="text-xs text-gray-500 mt-4">*สำหรับคน กทม. กรุณาสแกนเช็กอินสะสมแต้มบนทีวีก่อนใช้งานนะคะ</p>
             </div>
 
             <div id="food-menu-section" class="hidden">
+                <div id="food-preorder-note" class="hidden mb-4 p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-sm font-semibold text-center"></div>
                 <h2 class="text-lg font-bold mb-4 text-gray-800">🍱 เลือกรายการอาหาร</h2>
                 <div id="food-menu-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
 
@@ -71,9 +64,18 @@
                 <h2 class="text-xl font-bold mb-4">🏠 ข้อมูลจัดส่ง & ชำระเงิน</h2>
 
                 <form onsubmit="finalSubmitFood(event)">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล*</label>
+                        <input type="text" id="food-fullname" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์*</label>
+                        <input type="tel" id="food-phone" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                    </div>
                     <div class="mb-5">
                         <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่งของคุณ (ปักหมุดบ้าน)*</label>
-                        <textarea id="food-address" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500" rows="3" placeholder="กรุณากรอกที่อยู่ชัดเจน เพื่อให้ไรเดอร์มารับอาหารไปส่งได้ถูกค่ะ"></textarea>
+                        <textarea id="food-address" required oninput="checkFoodAddressArea()" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500" rows="3" placeholder="กรุณากรอกที่อยู่ชัดเจน มีคำว่ากรุงเทพหรือกทม. เพื่อให้ไรเดอร์มารับอาหารไปส่งได้ถูกค่ะ"></textarea>
+                        <p id="food-address-warning" class="hidden text-xs text-red-600 mt-1 font-bold">⚠️ เมนูอาหารส่งเฉพาะในเขตกรุงเทพ/ปริมณฑลเท่านั้น กรุณาระบุที่อยู่ให้มีคำว่า "กรุงเทพ" หรือ "กทม." ด้วยค่ะ</p>
                         <p class="text-xs text-gray-500 mt-1">*ที่อยู่นี้จะเป็นจุดที่ลูกค้าปักหมุดเรียกไรเดอร์ในแอป (Grab/Bolt) หลังแอดมินยืนยันออเดอร์แล้ว</p>
                     </div>
 
@@ -94,7 +96,7 @@
 
                     <div class="flex gap-3">
                         <button type="button" onclick="backToMenu('food')" class="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold">กลับ</button>
-                        <button type="submit" id="btn-submit-food" class="w-2/3 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">แจ้งโอน & สั่งซื้อ</button>
+                        <button type="submit" id="btn-submit-food" class="w-2/3 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">แจ้งโอน & สั่งซื้อ</button>
                     </div>
                 </form>
             </div>
@@ -231,16 +233,50 @@
         const EXEC_URL = 'https://script.google.com/macros/s/AKfycbz0Q2AG7WlKzQaWCNii47VS8DU__Tz4eOAAIiCkCn5VL3uBazq9YiGDtf0wYis_A-nlVw/exec';
         const RESUME_STORAGE_KEY = 'ytk_checkout_state';
 
+        // action ที่อ่านข้อมูลอย่างเดียว (ไม่มีผลข้างเคียง) เท่านั้นที่ retry อัตโนมัติได้อย่างปลอดภัย -
+        // action ที่เขียนข้อมูล (submitOrder ฯลฯ) ห้าม retry อัตโนมัติเด็ดขาด เพราะถ้าออเดอร์แรกสร้างสำเร็จแล้ว
+        // แต่ response หลุดหาย (เช่นเน็ตกระตุก) การ retry จะยิงส่งออเดอร์ซ้ำอีกใบโดยลูกค้าไม่รู้ตัว
+        const RETRYABLE_ACTIONS = new Set([
+            'getFoodSettings', 'getNationwidePaymentSettings',
+            'getAvailableMenu', 'getAvailableNationwideMenu',
+            'verifyBkkUser', 'getCustomerProfile'
+        ]);
+
+        async function callApiOnce(action, params, timeoutMs) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(EXEC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // เลี่ยง CORS preflight
+                    body: JSON.stringify({ action: action, params: params || {} }),
+                    signal: controller.signal
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+                return data.result;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         // เรียกฟังก์ชันหลังบ้านผ่าน fetch() ไปที่ Apps Script backend (ข้ามโดเมน แต่ Apps Script อนุญาต CORS ให้แล้ว)
+        // Apps Script บางทีตอบช้า/หลุดตอน cold start ทำให้เจอ "Failed to fetch" เป็นครั้งคราว -
+        // action ที่อ่านข้อมูลอย่างเดียวจะ retry ให้อัตโนมัติสูงสุด 3 ครั้งก่อนโชว์ error ให้ผู้ใช้เห็น
         async function callApi(action, params) {
-            const res = await fetch(EXEC_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // เลี่ยง CORS preflight
-                body: JSON.stringify({ action: action, params: params || {} })
-            });
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
-            return data.result;
+            const maxAttempts = RETRYABLE_ACTIONS.has(action) ? 3 : 1;
+            let lastErr;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    return await callApiOnce(action, params, 15000);
+                } catch (err) {
+                    lastErr = err;
+                    const isNetworkIssue = err.name === 'AbortError' || err instanceof TypeError;
+                    if (!isNetworkIssue || attempt === maxAttempts) throw lastErr;
+                    await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // backoff เพิ่มขึ้นทีละรอบ
+                }
+            }
+            throw lastErr;
         }
 
         let liffInitPromise = null;
@@ -296,11 +332,8 @@
                     loadFoodMenu();
 
                     if (!pendingResume) {
-                        const params = new URLSearchParams(window.location.search);
-                        const isTestMode = params.get('test') === '1';
-                        const now = new Date();
-                        const isOpenHours = (now.getDay() === settings.orderDay && now.getHours() >= settings.startHour && now.getHours() < settings.endHour);
-                        if (isOpenHours || isTestMode) switchTab('food');
+                        const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
+                        if (isFoodOpenHours() || isTestMode) switchTab('food');
                     }
                 })
                 .catch(() => {
@@ -313,8 +346,26 @@
 
         function applyFoodSettingsToUI(settings) {
             document.getElementById('food-tab-subtext').innerText = settings.areaTimeNote;
-            document.getElementById('food-closed-note').innerHTML =
-                'Yateem Kitchen เปิดขายเมนูอาหารเฉพาะ<b>วัน' + DAY_NAMES_TH[settings.orderDay] + ' เวลา ' + settings.startHour + ':00 - ' + settings.endHour + ':00 น.</b> เท่านั้นค่ะ 🙏 กรุณากลับมาสั่งใหม่ในรอบถัดไปนะคะ';
+        }
+
+        // เช็กว่าตอนนี้อยู่ในช่วงเวลาเปิดขายจริง (วัน/เวลาที่แอดมินตั้งไว้) หรือไม่
+        function isFoodOpenHours() {
+            const now = new Date();
+            return !!foodSettings && now.getDay() === foodSettings.orderDay
+                && now.getHours() >= foodSettings.startHour && now.getHours() < foodSettings.endHour;
+        }
+
+        // แสดง/ซ่อนแบนเนอร์แจ้งว่าตอนนี้เป็นการสั่งล่วงหน้า (พรีออเดอร์) เพราะยังไม่ถึงรอบเปิดขายจริง
+        // เมนูอาหารเปิดให้สั่งได้ตลอดเวลาแล้ว - ออเดอร์ที่สั่งนอกเวลาจะไปรอคิวในหน้า "ออเดอร์วันนี้" ของแอดมิน
+        // เรียงตามลำดับที่สั่งเข้ามา รอจนกว่าจะถึงรอบเปิดขายจริงแล้วแอดมินจะทยอยดำเนินการตามคิว
+        function updateFoodPreorderNote() {
+            const note = document.getElementById('food-preorder-note');
+            if (isFoodOpenHours() || !foodSettings) {
+                note.classList.add('hidden');
+                return;
+            }
+            note.classList.remove('hidden');
+            note.innerHTML = '📌 ตอนนี้อยู่นอกเวลาเปิดขาย (เปิดขายเฉพาะ<b>วัน' + DAY_NAMES_TH[foodSettings.orderDay] + ' เวลา ' + foodSettings.startHour + ':00 - ' + foodSettings.endHour + ':00 น.</b>) แต่สั่งล่วงหน้าได้เลยค่ะ ออเดอร์จะเข้าคิวรอจัดส่งในรอบเปิดขายถัดไปให้อัตโนมัติ';
         }
 
         function applyNwPaymentSettingsToUI(settings) {
@@ -367,16 +418,8 @@
         // ---------------- โหลดสินค้า (public, ไม่ต้องล็อกอิน) ----------------
 
         function loadFoodMenu() {
-            const params = new URLSearchParams(window.location.search);
-            const isTestMode = params.get('test') === '1';
-            const now = new Date();
-            const isOpenHours = foodSettings && now.getDay() === foodSettings.orderDay && now.getHours() >= foodSettings.startHour && now.getHours() < foodSettings.endHour;
-
-            if (!isOpenHours && !isTestMode) {
-                document.getElementById('food-loading').classList.add('hidden');
-                document.getElementById('food-closed').classList.remove('hidden');
-                return;
-            }
+            // เมนูอาหารเปิดให้ดู/สั่งล่วงหน้าได้ตลอดเวลาแล้ว (ไม่บล็อกตามวัน/เวลาอีกต่อไป) - ดู updateFoodPreorderNote()
+            updateFoodPreorderNote();
 
             callApi('getAvailableMenu')
                 .then(renderFoodMenu)
@@ -413,7 +456,7 @@
                         <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
                             <div class="relative flex-shrink-0">
                                 <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
-                                ${item.isPopular ? '<span class="absolute -top-1.5 -left-1.5 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">🔥 ยอดนิยม</span>' : ''}
+                                ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
                             </div>
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
@@ -450,7 +493,7 @@
                         <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
                             <div class="relative flex-shrink-0">
                                 <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
-                                ${item.isPopular ? '<span class="absolute -top-1.5 -left-1.5 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">🔥 ยอดนิยม</span>' : ''}
+                                ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
                             </div>
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
@@ -584,22 +627,25 @@
             if (checkoutCancelled[type]) return;
 
             if (type === 'food') {
+                // เดี๋ยวนี้ไม่บังคับเช็กอินสะสมแต้มบนทีวีก่อนสั่งอาหารแล้ว - verifyBkkUser แค่ช่วยเติมชื่อ/เบอร์/ที่อยู่ให้อัตโนมัติถ้ามีข้อมูลเดิม
+                // พื้นที่จัดส่งจริงเช็กจากคำในที่อยู่ตอนกรอกฟอร์ม (checkFoodAddressArea) + เช็กซ้ำฝั่งเซิร์ฟเวอร์ตอนกดส่งออเดอร์
                 callApi('verifyBkkUser', { userId: profile.userId })
                     .then((result) => {
                         if (checkoutCancelled.food) return;
                         bkkVerification = result;
                         resetCheckoutButton('food');
-                        if (result.isBkk) {
-                            document.getElementById('food-address').value = result.address || '';
-                            showOrderForm('food');
-                        } else {
-                            showFoodBlocked(result.message);
-                        }
+                        document.getElementById('food-fullname').value = result.fullname || '';
+                        document.getElementById('food-phone').value = result.phone || '';
+                        document.getElementById('food-address').value = result.address || '';
+                        showOrderForm('food');
+                        checkFoodAddressArea();
                     })
-                    .catch((err) => {
+                    .catch(() => {
+                        // โหลดข้อมูลเดิมไม่สำเร็จ ไม่ต้องบล็อก ให้กรอกเองได้ตามปกติ
                         if (checkoutCancelled.food) return;
                         resetCheckoutButton('food');
-                        alert('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ' + err.message);
+                        showOrderForm('food');
+                        checkFoodAddressArea();
                     });
             } else {
                 callApi('getCustomerProfile', { userId: profile.userId })
@@ -630,20 +676,36 @@
             btnCancel.classList.add('hidden');
         }
 
-        function showFoodBlocked(message) {
-            document.getElementById('food-menu-section').classList.add('hidden');
-            document.getElementById('food-blocked').classList.remove('hidden');
-            document.getElementById('food-blocked-msg').innerText = message;
+        // เช็กว่าที่อยู่ที่พิมพ์อยู่มีคำในพื้นที่จัดส่ง (จาก foodSettings.areaKeywords) หรือยัง - เช็กสดตอนพิมพ์
+        // เป็นแค่การช่วยเตือนฝั่งหน้าเว็บ ตัวตัดสินจริงอยู่ที่เซิร์ฟเวอร์ตอนกดส่งออเดอร์ (submitOrder)
+        function isFoodAddressInArea(address) {
+            const keywords = (foodSettings && foodSettings.areaKeywords) || ['กรุงเทพ', 'กทม'];
+            return keywords.some(keyword => keyword && address.includes(keyword));
+        }
+
+        function checkFoodAddressArea() {
+            const address = document.getElementById('food-address').value.trim();
+            const inArea = address.length > 0 && isFoodAddressInArea(address);
+            document.getElementById('food-address-warning').classList.toggle('hidden', inArea || address.length === 0);
+            document.getElementById('btn-submit-food').disabled = !inArea;
         }
 
         async function finalSubmitFood(e) {
             e.preventDefault();
 
+            const address = document.getElementById('food-address').value.trim();
+            if (!isFoodAddressInArea(address)) {
+                checkFoodAddressArea();
+                alert('ขออภัยค่ะ 🙏 เมนูอาหารเปิดให้บริการจัดส่งเฉพาะพื้นที่กรุงเทพ/ปริมณฑลเท่านั้น กรุณาระบุที่อยู่ให้มีคำว่า "กรุงเทพ" หรือ "กทม." ด้วยค่ะ');
+                return;
+            }
+
             const btnSubmit = document.getElementById('btn-submit-food');
             btnSubmit.innerText = 'กำลังส่งออเดอร์...';
             btnSubmit.disabled = true;
 
-            const address = document.getElementById('food-address').value;
+            const fullname = document.getElementById('food-fullname').value.trim();
+            const phone = document.getElementById('food-phone').value.trim();
             const slipFile = document.getElementById('food-slip').files[0];
             const totalPrice = document.getElementById('total-price-food').innerText;
 
@@ -656,8 +718,8 @@
 
             const orderData = {
                 userId: profile.userId,
-                fullname: bkkVerification.fullname,
-                phone: bkkVerification.phone,
+                fullname: fullname,
+                phone: phone,
                 address: address,
                 items: itemsOrdered,
                 totalPrice: totalPrice
@@ -665,7 +727,7 @@
 
             try {
                 const slipBase64 = await getBase64(slipFile);
-                const slipName = `${bkkVerification.fullname.replace(/ /g,'_')}_${new Date().getTime()}.png`;
+                const slipName = `${fullname.replace(/ /g,'_')}_${new Date().getTime()}.png`;
 
                 callApi('submitOrder', { orderData: orderData, slipBase64: slipBase64, slipName: slipName })
                     .then((res) => {

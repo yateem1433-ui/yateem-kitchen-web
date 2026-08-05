@@ -109,15 +109,45 @@
         const EXEC_URL = 'https://script.google.com/macros/s/AKfycbz0Q2AG7WlKzQaWCNii47VS8DU__Tz4eOAAIiCkCn5VL3uBazq9YiGDtf0wYis_A-nlVw/exec';
         const POLL_INTERVAL_MS = 15000;
 
+        // action ที่อ่านข้อมูลอย่างเดียว (ไม่มีผลข้างเคียง) เท่านั้นที่ retry อัตโนมัติได้อย่างปลอดภัย -
+        // markOrderReceived/submitClaim/submitReview ห้าม retry อัตโนมัติ เพราะถ้าเขียนสำเร็จแล้วแต่ response หลุดหาย
+        // การ retry อาจสร้างเคลม/รีวิวซ้ำโดยลูกค้าไม่รู้ตัว
+        const RETRYABLE_ACTIONS = new Set(['getMyOrders', 'getFoodSettings']);
+
+        async function callApiOnce(action, params, timeoutMs) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(EXEC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: action, params: params || {} }),
+                    signal: controller.signal
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+                return data.result;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        // Apps Script บางทีตอบช้า/หลุดตอน cold start ทำให้เจอ "Failed to fetch" เป็นครั้งคราว -
+        // action ที่อ่านข้อมูลอย่างเดียวจะ retry ให้อัตโนมัติสูงสุด 3 ครั้งก่อนโชว์ error ให้ผู้ใช้เห็น
         async function callApi(action, params) {
-            const res = await fetch(EXEC_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: action, params: params || {} })
-            });
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
-            return data.result;
+            const maxAttempts = RETRYABLE_ACTIONS.has(action) ? 3 : 1;
+            let lastErr;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    return await callApiOnce(action, params, 15000);
+                } catch (err) {
+                    lastErr = err;
+                    const isNetworkIssue = err.name === 'AbortError' || err instanceof TypeError;
+                    if (!isNetworkIssue || attempt === maxAttempts) throw lastErr;
+                    await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // backoff เพิ่มขึ้นทีละรอบ
+                }
+            }
+            throw lastErr;
         }
 
         function withTimeout(promise, ms, timeoutMessage) {
@@ -332,8 +362,8 @@
                     </div>
                     <p class="text-xs text-gray-500 mb-2">*กดเปิดแอปแล้วกรอกจุดรับ-ส่งด้านบนเองในแอปได้เลยค่ะ</p>
                     <div class="space-y-2">
-                        <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งพัสดุ)</a>
-                        <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700">เรียก Bolt (เลือกเมนูส่งพัสดุในแอป)</a>
+                        <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งด่วนหรือส่งพัสดุ)</a>
+                        <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700">เรียก Bolt (เลือกส่งหรือรับพัสดุ)</a>
                     </div>
                    </div>`
                 : '';
