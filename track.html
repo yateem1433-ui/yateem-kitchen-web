@@ -33,7 +33,30 @@
         </div>
 
         <div id="status-container" class="hidden p-4">
-            <div id="orders-list" class="space-y-4"></div>
+            <div id="order-tabs" class="flex gap-2 mb-4">
+                <button id="order-tab-btn-active" onclick="switchOrderTab('active')" class="flex-1 py-2.5 rounded-lg font-bold text-xs shadow">
+                    🚚 กำลังดำเนินการ
+                </button>
+                <button id="order-tab-btn-completed" onclick="switchOrderTab('completed')" class="flex-1 py-2.5 rounded-lg font-bold text-xs shadow">
+                    🎉 จัดส่งสมบูรณ์
+                </button>
+                <button id="order-tab-btn-claims" onclick="switchOrderTab('claims')" class="flex-1 py-2.5 rounded-lg font-bold text-xs shadow">
+                    ⚠️ เคลม
+                </button>
+            </div>
+
+            <div id="order-panel-active">
+                <div id="orders-list-active" class="space-y-4"></div>
+                <p id="active-empty" class="hidden text-center text-gray-400 py-6">ไม่มีออเดอร์ที่กำลังดำเนินการอยู่ค่ะ</p>
+            </div>
+            <div id="order-panel-completed" class="hidden">
+                <div id="orders-list-completed" class="space-y-4"></div>
+                <p id="completed-empty" class="hidden text-center text-gray-400 py-6">ยังไม่มีออเดอร์ที่จัดส่งสมบูรณ์ค่ะ</p>
+            </div>
+            <div id="order-panel-claims" class="hidden">
+                <div id="orders-list-claims" class="space-y-4"></div>
+                <p id="claims-empty" class="hidden text-center text-gray-400 py-6">ยังไม่มีเรื่องแจ้งปัญหา/เคลมค่ะ</p>
+            </div>
 
             <a href="index.html" class="block w-full text-center bg-gray-100 text-gray-700 font-bold py-3 rounded-lg mt-4 mb-2 border border-gray-300">← กลับหน้าหลัก</a>
             <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
@@ -55,6 +78,27 @@
             <div class="flex gap-3">
                 <button onclick="closeClaimModal()" class="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold">ยกเลิก</button>
                 <button id="btn-submit-claim" onclick="confirmSubmitClaim()" class="w-2/3 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700">ส่งเรื่องเคลม</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- โมดัลให้คะแนน/รีวิวสินค้า -->
+    <div id="review-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-1">⭐ ให้คะแนนสินค้า</h2>
+            <p id="review-modal-item-name" class="text-sm font-bold text-gray-700 mb-3"></p>
+
+            <div id="review-stars" class="flex justify-center gap-2 mb-4 text-3xl"></div>
+
+            <label class="block text-sm font-medium text-gray-700 mb-1">คอมเมนต์ (ถ้ามี)</label>
+            <textarea id="review-comment" rows="3" class="w-full p-2 border border-gray-300 rounded-md mb-4" placeholder="บอกเล่าความประทับใจ/ข้อติชม"></textarea>
+
+            <label class="block text-sm font-medium text-gray-700 mb-1">แนบรูปสินค้า (ถ้ามี)</label>
+            <input type="file" id="review-image" accept="image/*" class="w-full text-sm text-gray-500 mb-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100">
+
+            <div class="flex gap-3">
+                <button onclick="closeReviewModal()" class="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold">ยกเลิก</button>
+                <button id="btn-submit-review" onclick="confirmSubmitReview()" class="w-2/3 bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600">ส่งรีวิว</button>
             </div>
         </div>
     </div>
@@ -92,7 +136,8 @@
         let currentUserId = null;
         let pollTimer = null;
         let pickupAddressCache = null;
-        const ordersById = {}; // orderId -> ข้อมูลออเดอร์ล่าสุด (ใช้ตอนเปิดโมดัลเคลม)
+        let currentOrderTab = 'active';
+        const ordersById = {}; // orderId -> ข้อมูลออเดอร์ล่าสุด (ใช้ตอนเปิดโมดัลเคลม/รีวิว)
 
         async function main() {
             document.getElementById('open-in-line-link').href = 'https://liff.line.me/' + MY_LIFF_ID;
@@ -128,6 +173,18 @@
             pollTimer = setInterval(() => refreshOrders(false), POLL_INTERVAL_MS);
         }
 
+        function switchOrderTab(tab) {
+            currentOrderTab = tab;
+            ['active', 'completed', 'claims'].forEach((t) => {
+                const btn = document.getElementById('order-tab-btn-' + t);
+                btn.classList.toggle('bg-blue-600', t === tab);
+                btn.classList.toggle('text-white', t === tab);
+                btn.classList.toggle('bg-gray-200', t !== tab);
+                btn.classList.toggle('text-gray-700', t !== tab);
+                document.getElementById('order-panel-' + t).classList.toggle('hidden', t !== tab);
+            });
+        }
+
         function refreshOrders(isFirstLoad) {
             callApi('getMyOrders', { userId: currentUserId })
                 .then((res) => renderOrders(res, isFirstLoad))
@@ -138,9 +195,9 @@
         }
 
         const LIGHT_LABELS = {
-            red: 'รับออเดอร์แล้ว กำลังรอครัว/แอดมินยืนยัน',
-            yellow: 'กำลังเตรียมอาหาร/สินค้าให้อยู่ค่ะ',
-            green: 'พร้อมจัดส่งแล้ว! 🎉'
+            red: '🔴 รับออเดอร์แล้ว กำลังรอครัว/แอดมินยืนยัน',
+            yellow: '🟡 กำลังเตรียมอาหาร/สินค้าให้อยู่ค่ะ',
+            green: '🟢 พร้อมจัดส่งแล้ว! 🎉'
         };
 
         const CLAIM_STATUS_LABELS = {
@@ -149,6 +206,28 @@
 
         function safeId(orderId) {
             return orderId.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        function formatDateTime(iso) {
+            if (!iso) return '-';
+            return new Date(iso).toLocaleString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function formatDateHeader(iso) {
+            if (!iso) return '-';
+            return new Date(iso).toLocaleDateString('th-TH', { day: '2-digit', month: 'long', year: 'numeric' });
+        }
+
+        // จัดกลุ่ม order ตามวันที่ (ใช้ field ที่ระบุ) แล้วคืนเป็น [{ dateKey, dateLabel, orders: [...] }] เรียงวันใหม่สุดก่อน
+        function groupByDate(orders, dateField) {
+            const groups = {};
+            orders.forEach((order) => {
+                const iso = order[dateField] || order.timestamp;
+                const dateKey = iso ? iso.slice(0, 10) : 'ไม่ทราบวันที่';
+                if (!groups[dateKey]) groups[dateKey] = { dateKey: dateKey, dateLabel: formatDateHeader(iso), orders: [] };
+                groups[dateKey].orders.push(order);
+            });
+            return Object.values(groups).sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1));
         }
 
         function renderOrders(res, isFirstLoad) {
@@ -169,37 +248,72 @@
 
             document.getElementById('no-orders').classList.add('hidden');
             document.getElementById('status-container').classList.remove('hidden');
+            if (isFirstLoad) switchOrderTab('active'); // ตั้งค่าสีแท็บเริ่มต้นตอนโหลดครั้งแรกเท่านั้น ไม่รีเซ็ตทับแท็บที่ลูกค้ากำลังดูอยู่ทุกรอบโพล
 
-            const container = document.getElementById('orders-list');
-            container.innerHTML = '';
+            res.orders.forEach((order) => { ordersById[order.orderId] = order; });
 
-            // ออเดอร์ที่ยังไม่กดรับสินค้าขึ้นก่อน (เรียงใหม่สุดก่อนตามที่ backend ส่งมา) ตามด้วยออเดอร์ที่รับแล้วไว้ล่างสุด
+            // แท็บ "กำลังดำเนินการ" - ออเดอร์ที่ยังไม่กดรับสินค้า
             const activeOrders = res.orders.filter((order) => !order.receivedStatus);
-            const doneOrders = res.orders.filter((order) => order.receivedStatus);
-            const orderedList = activeOrders.concat(doneOrders);
-
-            orderedList.forEach((order) => {
-                ordersById[order.orderId] = order;
-                container.insertAdjacentHTML('beforeend', buildOrderCard(order));
-                if (order.lightStatus === 'green' && order.type === 'food' && !order.receivedStatus) {
+            const activeContainer = document.getElementById('orders-list-active');
+            activeContainer.innerHTML = '';
+            document.getElementById('active-empty').classList.toggle('hidden', activeOrders.length > 0);
+            activeOrders.forEach((order) => {
+                activeContainer.insertAdjacentHTML('beforeend', buildOrderCard(order, false));
+                if (order.lightStatus === 'green' && order.type === 'food') {
                     fillRiderAddresses(order);
                 }
             });
+
+            // แท็บ "จัดส่งสมบูรณ์" - ออเดอร์ที่กดรับสินค้าแล้ว จัดกลุ่มตามวันที่รับ
+            const completedOrders = res.orders.filter((order) => order.receivedStatus);
+            const completedContainer = document.getElementById('orders-list-completed');
+            completedContainer.innerHTML = '';
+            document.getElementById('completed-empty').classList.toggle('hidden', completedOrders.length > 0);
+            groupByDate(completedOrders, 'receivedAt').forEach((group) => {
+                completedContainer.insertAdjacentHTML('beforeend', `<p class="text-xs font-bold text-gray-500 mt-4 mb-2 first:mt-0">📅 ${group.dateLabel}</p>`);
+                group.orders.forEach((order) => {
+                    completedContainer.insertAdjacentHTML('beforeend', buildOrderCard(order, true));
+                });
+            });
+
+            // แท็บ "เคลม" - ออเดอร์ที่มีการแจ้งปัญหา จัดกลุ่มตามวันที่แจ้งเคลม
+            const claimOrders = res.orders.filter((order) => order.claim);
+            const claimsContainer = document.getElementById('orders-list-claims');
+            claimsContainer.innerHTML = '';
+            document.getElementById('claims-empty').classList.toggle('hidden', claimOrders.length > 0);
+            // จัดกลุ่มตามวันที่แจ้งเคลม (claim.timestamp) ไม่ใช่วันที่สั่งซื้อ - groupByDate ใช้ field ระดับบนสุดไม่ได้เพราะ timestamp ซ้อนอยู่ใน order.claim จึงจัดกลุ่มเองตรงนี้
+            const claimGroups = {};
+            claimOrders.forEach((order) => {
+                const iso = order.claim && order.claim.timestamp;
+                const dateKey = iso ? iso.slice(0, 10) : 'ไม่ทราบวันที่';
+                if (!claimGroups[dateKey]) claimGroups[dateKey] = { dateKey: dateKey, dateLabel: formatDateHeader(iso), orders: [] };
+                claimGroups[dateKey].orders.push(order);
+            });
+            Object.values(claimGroups).sort((a, b) => (a.dateKey < b.dateKey ? 1 : -1)).forEach((group) => {
+                claimsContainer.insertAdjacentHTML('beforeend', `<p class="text-xs font-bold text-gray-500 mt-4 mb-2 first:mt-0">📅 ${group.dateLabel}</p>`);
+                group.orders.forEach((order) => {
+                    claimsContainer.insertAdjacentHTML('beforeend', buildOrderCard(order, true));
+                });
+            });
         }
 
-        function buildOrderCard(order) {
+        function buildOrderCard(order, isHistoryView) {
             const sid = safeId(order.orderId);
             const lightStatus = order.lightStatus || 'red';
 
-            const lights = ['red', 'yellow', 'green'].map((color) => {
-                const active = color === lightStatus;
-                return `<div class="text-center">
-                    <div class="w-9 h-9 rounded-full bg-${color === 'yellow' ? 'yellow-400' : color + '-500'} mx-auto mb-1 border-4 ${active ? 'border-gray-800' : 'border-transparent'}"></div>
-                </div>`;
-            }).join('');
+            const glowClass = lightStatus === 'yellow'
+                ? 'bg-yellow-400 shadow-[0_0_16px_3px_rgba(250,204,21,0.6)]'
+                : lightStatus === 'green'
+                    ? 'bg-green-500 shadow-[0_0_16px_3px_rgba(34,197,94,0.6)]'
+                    : 'bg-red-500 shadow-[0_0_16px_3px_rgba(239,68,68,0.6)]';
+            const cardTint = lightStatus === 'yellow'
+                ? 'bg-yellow-50 border-yellow-300'
+                : lightStatus === 'green'
+                    ? 'bg-green-50 border-green-300'
+                    : 'bg-red-50 border-red-200';
 
             const trackingBlock = (order.trackingNumber || order.trackingImageUrl)
-                ? `<div class="bg-gray-50 rounded-lg p-3 mb-3 text-center">
+                ? `<div class="bg-white bg-opacity-70 rounded-lg p-3 mb-3 text-center">
                     <p class="text-xs text-gray-500">เลขพัสดุ</p>
                     <p class="font-bold text-gray-800 mb-1">${order.trackingNumber || '-'}</p>
                     ${order.trackingImageUrl ? `<a href="${order.trackingImageUrl}" target="_blank" class="text-xs text-blue-600 underline">ดูรูปเลขพัสดุ</a>` : ''}
@@ -208,7 +322,7 @@
 
             const riderBlock = (lightStatus === 'green' && order.type === 'food' && !order.receivedStatus)
                 ? `<div id="rider-call-${sid}" class="mb-3">
-                    <div class="text-left bg-gray-50 rounded-lg p-3 mb-2 text-sm">
+                    <div class="text-left bg-white bg-opacity-70 rounded-lg p-3 mb-2 text-sm">
                         <p class="font-bold text-gray-700">📍 จุดรับอาหาร (ต้นทาง)</p>
                         <p id="rider-pickup-${sid}" class="text-gray-600 mb-2">กำลังโหลด...</p>
                         <p class="font-bold text-gray-700">🏠 จุดส่ง (ที่อยู่ของคุณ)</p>
@@ -222,41 +336,47 @@
                    </div>`
                 : '';
 
-            const receivedBlock = order.receivedStatus
-                ? `<div class="flex items-center justify-center gap-2 bg-gray-100 border border-gray-300 rounded-lg py-3 mb-2">
-                    <span class="text-3xl leading-none text-gray-500">✅</span>
-                    <span class="font-bold text-gray-500">ได้รับสินค้าแล้ว</span>
-                   </div>`
-                : (lightStatus === 'green'
-                    ? `<button onclick="confirmReceived('${order.type}', '${order.orderId}')" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">✅ กดเมื่อได้รับสินค้าแล้วเท่านั้น</button>`
-                    : '');
+            const receivedActionBlock = (!order.receivedStatus && lightStatus === 'green')
+                ? `<button onclick="confirmReceived('${order.type}', '${order.orderId}')" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">✅ กดเมื่อได้รับสินค้าแล้วเท่านั้น</button>`
+                : '';
 
             const claimBlock = order.claim
-                ? `<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                ? `<div class="bg-white bg-opacity-70 border border-red-200 rounded-lg p-3 text-center">
                     <p class="text-sm font-bold text-red-700">${CLAIM_STATUS_LABELS[order.claim.status] || order.claim.status}</p>
                     <p class="text-xs text-gray-600 mt-1">${order.claim.description || ''}</p>
                    </div>`
-                : `<button onclick="openClaimModal('${order.type}', '${order.orderId}')" class="w-full bg-white text-red-600 font-bold py-2.5 rounded-lg border border-red-300 hover:bg-red-50">⚠️ แจ้งปัญหา/เคลมสินค้า</button>`;
+                : (!isHistoryView ? `<button onclick="openClaimModal('${order.type}', '${order.orderId}')" class="w-full bg-white text-red-600 font-bold py-2.5 rounded-lg border border-red-300 hover:bg-red-50">⚠️ แจ้งปัญหา/เคลมสินค้า</button>` : '');
 
-            const cardStyle = order.receivedStatus ? ' style="filter: grayscale(1); opacity: 0.65;"' : '';
+            // ปุ่ม "ให้คะแนน" ต่อชิ้น - โชว์เฉพาะออเดอร์ที่รับสินค้าแล้ว และมีข้อมูลรายชิ้น (ItemsJson)
+            const reviewBlock = (order.receivedStatus && order.itemsDetailed && order.itemsDetailed.length > 0)
+                ? `<div class="border-t pt-2 mt-2 space-y-1.5">
+                    ${order.itemsDetailed.map((item) => item.alreadyReviewed
+                        ? `<p class="text-xs text-gray-500">✅ รีวิว "${item.name}" แล้ว - ขอบคุณค่ะ</p>`
+                        : `<button onclick="openReviewModal('${order.type}', '${order.orderId}', '${item.id}', '${(item.name || '').replace(/'/g, "\\'")}')" class="w-full text-left text-xs font-bold text-yellow-700 bg-white bg-opacity-70 border border-yellow-300 rounded px-3 py-2 hover:bg-yellow-50">⭐ ให้คะแนน "${item.name}"</button>`
+                    ).join('')}
+                   </div>`
+                : '';
 
             return `
-                <div class="border rounded-lg p-4"${cardStyle}>
+                <div class="border rounded-lg p-4 ${cardTint}">
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <p class="text-xs text-gray-500">${order.type === 'food' ? '🍲 อาหาร' : '📦 สินค้าแห้ง'}</p>
                             <h3 class="font-bold text-gray-800">${order.orderId}</h3>
+                            <p class="text-xs text-gray-400">${formatDateTime(order.timestamp)}</p>
                         </div>
                     </div>
                     <p class="text-sm text-gray-600 mb-3">${order.items}</p>
 
-                    <div class="flex items-center justify-center gap-6 mb-2">${lights}</div>
-                    <p class="text-center text-sm font-black text-gray-800 mb-3">${LIGHT_LABELS[lightStatus] || order.status}</p>
+                    <div class="text-center mb-3">
+                        <span class="inline-block px-4 py-2 rounded-full font-bold text-white text-xs ${glowClass}">${LIGHT_LABELS[lightStatus] || order.status}</span>
+                    </div>
 
                     ${trackingBlock}
                     ${riderBlock}
-                    ${receivedBlock}
+                    ${receivedActionBlock}
                     ${claimBlock}
+                    ${reviewBlock}
                 </div>
             `;
         }
@@ -353,6 +473,86 @@
                 btn.disabled = false;
                 btn.innerText = 'ส่งเรื่องเคลม';
                 alert('เกิดข้อผิดพลาดในการส่งเรื่องเคลม: ' + err.message);
+            }
+        }
+
+        // ---------------- ให้คะแนน/รีวิวสินค้า ----------------
+
+        let pendingReview = null;
+        let selectedStars = 0;
+
+        function openReviewModal(type, orderId, menuId, menuName) {
+            pendingReview = { type, orderId, menuId, menuName };
+            selectedStars = 0;
+            document.getElementById('review-modal-item-name').innerText = menuName;
+            document.getElementById('review-comment').value = '';
+            document.getElementById('review-image').value = '';
+            renderStars();
+            document.getElementById('review-modal').classList.remove('hidden');
+        }
+
+        function closeReviewModal() {
+            document.getElementById('review-modal').classList.add('hidden');
+            pendingReview = null;
+        }
+
+        function renderStars() {
+            const container = document.getElementById('review-stars');
+            container.innerHTML = '';
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('span');
+                star.innerText = i <= selectedStars ? '★' : '☆';
+                star.className = 'cursor-pointer ' + (i <= selectedStars ? 'text-yellow-500' : 'text-gray-300');
+                star.onclick = () => { selectedStars = i; renderStars(); };
+                container.appendChild(star);
+            }
+        }
+
+        async function confirmSubmitReview() {
+            if (!pendingReview) return;
+            if (selectedStars === 0) {
+                alert('กรุณาเลือกจำนวนดาวก่อนส่งรีวิวค่ะ');
+                return;
+            }
+
+            const btn = document.getElementById('btn-submit-review');
+            btn.disabled = true;
+            btn.innerText = 'กำลังส่ง...';
+
+            const comment = document.getElementById('review-comment').value.trim();
+            const imageFile = document.getElementById('review-image').files[0];
+            const review = pendingReview;
+
+            try {
+                const photoBase64 = imageFile ? await getBase64(imageFile) : null;
+                const photoName = imageFile ? `review_${review.orderId}_${new Date().getTime()}.png` : null;
+
+                const res = await callApi('submitReview', {
+                    orderType: review.type,
+                    orderId: review.orderId,
+                    userId: currentUserId,
+                    menuId: review.menuId,
+                    menuName: review.menuName,
+                    rating: selectedStars,
+                    comment: comment,
+                    photoBase64: photoBase64,
+                    photoName: photoName
+                });
+
+                btn.disabled = false;
+                btn.innerText = 'ส่งรีวิว';
+
+                if (res.success) {
+                    closeReviewModal();
+                    alert('ขอบคุณสำหรับรีวิวค่ะ 🙏');
+                    refreshOrders(false);
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + res.error);
+                }
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerText = 'ส่งรีวิว';
+                alert('เกิดข้อผิดพลาดในการส่งรีวิว: ' + err.message);
             }
         }
 

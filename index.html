@@ -411,9 +411,13 @@
                 menuData.forEach(item => {
                     const itemHtml = `
                         <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
-                            <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
+                            <div class="relative flex-shrink-0">
+                                <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
+                                ${item.isPopular ? '<span class="absolute -top-1.5 -left-1.5 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">🔥 ยอดนิยม</span>' : ''}
+                            </div>
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
+                                ${item.ratingCount > 0 ? `<p class="text-xs text-yellow-600 font-bold">★ ${item.rating} (${item.ratingCount})</p>` : ''}
                                 <p class="text-green-600 font-bold text-xl mt-1">${item.price} บาท</p>
                             </div>
                             <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
@@ -444,9 +448,13 @@
                 menuData.forEach(item => {
                     const itemHtml = `
                         <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
-                            <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
+                            <div class="relative flex-shrink-0">
+                                <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" class="w-24 h-24 rounded-lg object-cover">
+                                ${item.isPopular ? '<span class="absolute -top-1.5 -left-1.5 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">🔥 ยอดนิยม</span>' : ''}
+                            </div>
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
+                                ${item.ratingCount > 0 ? `<p class="text-xs text-yellow-600 font-bold">★ ${item.rating} (${item.ratingCount})</p>` : ''}
                                 <p class="text-blue-600 font-bold text-xl mt-1">${item.price} บาท</p>
                             </div>
                             <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
@@ -642,7 +650,7 @@
             const itemsOrdered = [];
             state.food.menuData.forEach(item => {
                 if (state.food.cart[item.id] > 0) {
-                    itemsOrdered.push({ name: item.name, qty: state.food.cart[item.id] });
+                    itemsOrdered.push({ id: item.id, name: item.name, qty: state.food.cart[item.id] });
                 }
             });
 
@@ -707,7 +715,7 @@
             const itemsOrdered = [];
             state.nw.menuData.forEach(item => {
                 if (state.nw.cart[item.id] > 0) {
-                    itemsOrdered.push({ name: item.name, qty: state.nw.cart[item.id] });
+                    itemsOrdered.push({ id: item.id, name: item.name, qty: state.nw.cart[item.id] });
                 }
             });
 
