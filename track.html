@@ -128,7 +128,14 @@
                     signal: controller.signal
                 });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+                if (!data.success) {
+                    // หลังบ้านใส่คำนำหน้า SYSTEM_BUSY: เมื่อคิว LockService เต็ม - ตัดโค้ดภายในทิ้ง
+                    // ก่อนโชว์ ลูกค้าควรเห็นแค่ข้อความภาษาไทย ไม่ใช่โค้ดของระบบ
+                    const raw = data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+                    const err = new Error(raw.replace(/^(Error:\s*)?SYSTEM_BUSY:\s*/, ''));
+                    err.isBusy = /^(Error:\s*)?SYSTEM_BUSY:\s*/.test(raw);
+                    throw err;
+                }
                 return data.result;
             } finally {
                 clearTimeout(timer);
@@ -150,7 +157,8 @@
                     lastErr = err;
                     const isNetworkIssue = err.name === 'AbortError' || err instanceof TypeError;
                     if (!isNetworkIssue || attempt === maxAttempts) throw lastErr;
-                    await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // backoff เพิ่มขึ้นทีละรอบ
+                    // คิวเต็มต้องรอนานกว่าเน็ตกระตุก เพราะต้องรอคำขอของคนอื่นเขียนเสร็จก่อน
+                    await new Promise(resolve => setTimeout(resolve, (err.isBusy ? 1500 : 500) * attempt)); // backoff เพิ่มขึ้นทีละรอบ
                 }
             }
             throw lastErr;

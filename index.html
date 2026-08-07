@@ -244,15 +244,24 @@
         const EXEC_URL = 'https://script.google.com/macros/s/AKfycbz0Q2AG7WlKzQaWCNii47VS8DU__Tz4eOAAIiCkCn5VL3uBazq9YiGDtf0wYis_A-nlVw/exec';
         const RESUME_STORAGE_KEY = 'ytk_checkout_state';
 
-        // action ที่อ่านข้อมูลอย่างเดียว (ไม่มีผลข้างเคียง) เท่านั้นที่ retry อัตโนมัติได้อย่างปลอดภัย -
-        // action ที่เขียนข้อมูล (submitOrder ฯลฯ) ห้าม retry อัตโนมัติเด็ดขาด เพราะถ้าออเดอร์แรกสร้างสำเร็จแล้ว
-        // แต่ response หลุดหาย (เช่นเน็ตกระตุก) การ retry จะยิงส่งออเดอร์ซ้ำอีกใบโดยลูกค้าไม่รู้ตัว
+        // action ที่อ่านข้อมูลอย่างเดียว (ไม่มีผลข้างเคียง) - retry ได้เสมอ และใช้ timeout สั้น (45 วิ)
         const RETRYABLE_ACTIONS = new Set([
             'getFoodSettings', 'getNationwidePaymentSettings',
             'getAvailableMenu', 'getAvailableNationwideMenu',
             'verifyBkkUser', 'getCustomerProfile', 'getBootstrap',
             'getMenuReviews'
         ]);
+
+        // action ที่เขียนข้อมูล แต่ retry ซ้ำได้อย่างปลอดภัย เพราะหลังบ้านกันซ้ำด้วย requestId:
+        // requestId ถูกสร้างครั้งเดียวตอนเปิดฟอร์มเช็กเอาต์ และไม่เปลี่ยนตอน retry - หลังบ้านเจอ
+        // requestId เดิมจะคืน orderId เดิมแทนการสร้างออเดอร์ใหม่ (findOrderByRequestId_ ใน Code.gs)
+        // จึงไม่เกิดออเดอร์ซ้ำแม้ response แรกจะหลุดหายไป
+        // ยังคงใช้ timeout ยาว (120 วิ) เพราะต้องรออัปโหลดสลิปเข้า Drive
+        const IDEMPOTENT_WRITE_ACTIONS = new Set(['submitOrder', 'submitNationwideOrder']);
+
+        // หลังบ้านใส่คำนำหน้านี้เมื่อคิว LockService เต็ม = ระบบไม่ว่างชั่วคราว ลองใหม่แล้วมีโอกาสสำเร็จ
+        // ต่างจาก error จริง (สลิปซ้ำ/นอกพื้นที่/นอกเวลา) ที่ลองใหม่กี่ครั้งก็ได้ผลเดิม
+        const BUSY_PREFIX = 'SYSTEM_BUSY';
 
         async function callApiOnce(action, params, timeoutMs) {
             const controller = new AbortController();
@@ -265,7 +274,14 @@
                     signal: controller.signal
                 });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ');
+                if (!data.success) {
+                    const raw = data.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+                    const isBusy = new RegExp('^(Error:\\s*)?' + BUSY_PREFIX + ':\\s*').test(raw);
+                    // ตัดโค้ดภายในออกก่อนโชว์ ลูกค้าควรเห็นแค่ข้อความภาษาไทย
+                    const err = new Error(raw.replace(new RegExp('^(Error:\\s*)?' + BUSY_PREFIX + ':\\s*'), ''));
+                    err.isBusy = isBusy;
+                    throw err;
+                }
                 return data.result;
             } finally {
                 clearTimeout(timer);
@@ -278,9 +294,10 @@
         // timeout แยกตามประเภท: อ่านข้อมูล 45 วิ (เผื่อคิวรอ Apps Script ประมวลผล), เขียนข้อมูล 120 วิ
         // (ต้องรอทั้งอัปโหลดสลิปเข้า Drive และรอ LockService คิวกับคำขออื่น - 15 วิเดิมตัดคำขอที่กำลังจะสำเร็จทิ้ง)
         async function callApi(action, params) {
-            const isRetryable = RETRYABLE_ACTIONS.has(action);
-            const maxAttempts = isRetryable ? 3 : 1;
-            const timeoutMs = isRetryable ? 45000 : 120000;
+            const isRead = RETRYABLE_ACTIONS.has(action);
+            const canRetry = isRead || IDEMPOTENT_WRITE_ACTIONS.has(action);
+            const maxAttempts = canRetry ? 3 : 1;
+            const timeoutMs = isRead ? 45000 : 120000; // เขียนข้อมูลใช้ 120 วิเสมอ แม้จะ retry ได้
             let lastErr;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
@@ -288,8 +305,12 @@
                 } catch (err) {
                     lastErr = err;
                     const isNetworkIssue = err.name === 'AbortError' || err instanceof TypeError;
-                    if (!isNetworkIssue || attempt === maxAttempts) throw lastErr;
-                    await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // backoff เพิ่มขึ้นทีละรอบ
+                    // คิวเต็ม (SYSTEM_BUSY) ก็ลองใหม่ได้ - เดิมเคสนี้เด้ง error ทันทีทั้งที่รอแป๊บเดียวก็ผ่าน
+                    const worthRetrying = isNetworkIssue || err.isBusy === true;
+                    if (!worthRetrying || attempt === maxAttempts) throw lastErr;
+                    // คิวเต็มต้องรอนานกว่าเน็ตกระตุก เพราะต้องรอคำขอของคนอื่นเขียนเสร็จก่อน
+                    const backoffMs = (err.isBusy ? 1500 : 500) * attempt;
+                    await new Promise(resolve => setTimeout(resolve, backoffMs)); // backoff เพิ่มขึ้นทีละรอบ
                 }
             }
             throw lastErr;
