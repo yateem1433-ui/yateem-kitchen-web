@@ -81,7 +81,7 @@
                         <p class="text-xs leading-tight" style="color:#666666;">ทุกการซื้อคือการให้</p>
                     </div>
                 </div>
-                <a href="track.html" class="flex items-center gap-1 text-xs font-bold whitespace-nowrap" style="color:#0E2036;">📍 ติดตามออเดอร์</a>
+                <a href="track.html" class="flex items-center gap-1.5 text-sm font-bold whitespace-nowrap px-4 py-2.5 rounded-full shadow" style="background:#EAB934;color:#0E2036;">📍 ติดตามออเดอร์</a>
             </div>
             <div class="mt-3 relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:#EAB934;">🔍</span>
@@ -249,8 +249,8 @@
                             </label>
                             <label class="border-2 border-gray-200 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 rounded-lg p-3 text-center cursor-pointer block">
                                 <input type="radio" name="nw-payment-method" value="transfer" onchange="updateNwPaymentUI()" class="mb-1" checked>
-                                <div class="text-sm font-bold text-gray-800">โอนเงิน</div>
-                                <div class="text-xs text-gray-500">จัดส่งฟรี</div>
+                                <div class="pay-red text-sm font-bold text-gray-800">โอนเงิน</div>
+                                <div class="pay-red text-xs text-gray-500">จัดส่งฟรี</div>
                             </label>
                         </div>
                     </div>
@@ -264,7 +264,7 @@
                     </div>
 
                     <div id="nw-transfer-block" class="mb-6 p-4 border border-dashed border-blue-500 rounded-lg text-center bg-blue-50">
-                        <p class="text-sm text-blue-700 font-bold mb-2">🏦 โอนเงิน (จัดส่งฟรี)</p>
+                        <p class="pay-red text-sm text-blue-700 font-bold mb-2">🏦 โอนเงิน (จัดส่งฟรี)</p>
                         <img id="nw-qr-image" src="" alt="QR พร้อมเพย์" class="mx-auto w-40 h-40 mb-2 object-contain hidden">
                         <p class="text-sm text-gray-700">ชื่อบัญชี: <span id="nw-bank-account-name" class="font-bold">-</span></p>
                         <p class="text-sm text-gray-700">ธนาคาร: <span id="nw-bank-name" class="font-bold">-</span></p>
@@ -748,7 +748,10 @@
                         container.insertAdjacentHTML('beforeend', `
                             <div class="border-b border-gray-100 pb-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-yellow-500 text-sm">${starsText(r.rating)}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-bold text-gray-800">${escapeHtml(r.name || 'ลูกค้า')}</span>
+                                        <span class="text-yellow-500 text-sm">${starsText(r.rating)}</span>
+                                    </div>
                                     <span class="text-xs text-gray-400">${formatReviewDate(r.timestamp)}</span>
                                 </div>
                                 ${commentHtml}
