@@ -55,6 +55,10 @@
         .text-red-600, .text-red-500, .text-red-700{ color:#d94848 !important; }
         a.underline, .underline{ text-decoration-color:var(--gold); }
 
+        /* ราคาสินค้าในการ์ด (ตัว text-xl ในการ์ด) + ป้าย "เปิดขายเฉพาะวัน" = ตัวอักษรสีแดงเน้น */
+        #food-menu-container .text-xl, #nw-menu-container .text-xl{ color:#DC2626 !important; }
+        #food-preorder-note{ color:#DC2626 !important; border-color:#DC2626 !important; }
+
         .loader { border-top-color: var(--gold); animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
