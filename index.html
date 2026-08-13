@@ -5,9 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Yateem Market - สั่งอาหาร & สินค้าแห้ง</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        .loader { border-top-color: #00B900; animation: spinner 1.5s linear infinite; }
+        /* ============================================================
+           Yateem UI reskin — พาเลตต์กรมท่า+ทอง + ฟอนต์ Kanit
+           วิธี theme-override: รีแมปคลาส Tailwind เดิมทั้งหน้าให้เป็นธีมมืด
+           (ไม่แตะโครง/ฟังก์ชัน - การ์ดที่ render จาก JS ใช้คลาสเดียวกันจึงเปลี่ยนตามด้วย)
+           ============================================================ */
+        :root{
+            --navy:#0E2036; --deep:#093862; --primary:#0C4D87; --medium:#155B9A; --bright:#1B76C5;
+            --gold:#EAB934; --soft-gold:#EFCC6B; --cream:#F7E6B5; --white:#FFFFFF;
+        }
+        html, body{ background:var(--navy) !important; color:var(--cream); font-family:'Kanit',sans-serif; }
+        body, button, input, textarea, select, h1, h2, h3, h4, p, span, a, label, div{ font-family:'Kanit',sans-serif; }
+
+        /* พื้นการ์ด/กล่องขาว -> พื้นผิวน้ำเงินเข้ม + เส้นขอบบางตามดีไซน์ */
+        .bg-white{ background:var(--deep) !important; color:var(--white); border:1px solid rgba(21,91,154,0.55); }
+        .bg-gray-100{ background:var(--navy) !important; }
+        .bg-gray-50{ background:var(--primary) !important; }
+        .bg-gray-200, .bg-gray-400{ background:var(--medium) !important; color:var(--cream) !important; }
+
+        /* ตัวอักษรเทา -> ครีม/ขาว */
+        .text-gray-800, .text-gray-700, .text-gray-600, .text-gray-500, .text-gray-400, .text-black{ color:var(--cream) !important; }
+        h1, h2, h3{ color:var(--white); }
+
+        /* ปุ่ม/พื้นเขียว-น้ำเงินแบรนด์เดิม -> ทอง (ตัวหนังสือเข้ม) */
+        .bg-green-600, .bg-green-500, .bg-green-700, .bg-blue-600, .bg-blue-500, .bg-blue-700{ background:var(--gold) !important; color:var(--navy) !important; }
+        .text-green-600, .text-green-700, .text-green-500, .text-blue-800, .text-blue-600, .text-blue-700, .text-amber-600, .text-amber-800, .text-yellow-600{ color:var(--gold) !important; }
+        .hover\:bg-green-700:hover, .hover\:bg-blue-700:hover, .hover\:bg-green-100:hover{ background:var(--soft-gold) !important; }
+
+        /* พื้นอ่อน (โปรฯ / โน้ต / กล่องชำระเงิน) -> โทนทองโปร่งบนพื้นเข้ม */
+        .bg-amber-50, .bg-green-50{ background:rgba(234,185,52,0.12) !important; color:var(--cream) !important; }
+        .border-amber-300, .border-green-500, .border-green-300{ border-color:var(--gold) !important; }
+
+        /* เส้นขอบทั่วไป + ฟอร์ม */
+        .border, .border-gray-300, .border-gray-200, .border-t{ border-color:var(--medium) !important; }
+        input, textarea, select{ background:var(--navy) !important; color:var(--white) !important; border-color:var(--medium) !important; }
+        input::placeholder, textarea::placeholder{ color:rgba(247,230,181,0.5) !important; }
+
+        /* แถบล่างลอย (ยอดรวม/ตะกร้า) แบบ glassmorphism */
+        .fixed.bottom-0{ background:rgba(14,32,54,0.82) !important; backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-top:1px solid var(--medium) !important; box-shadow:0 -6px 22px rgba(0,0,0,0.45) !important; }
+
+        /* เงาให้เข้าธีมมืด + มุมโค้งการ์ด */
+        .shadow, .shadow-lg, .shadow-sm{ box-shadow:0 6px 18px rgba(0,0,0,0.38) !important; }
+        .text-red-600, .text-red-500, .text-red-700{ color:#ff7a7a !important; }
+        a.underline, .underline{ text-decoration-color:var(--gold); }
+
+        .loader { border-top-color: var(--gold); animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
