@@ -152,7 +152,28 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์*</label>
                         <input type="tel" id="food-phone" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
                     </div>
-                    <div class="mb-5">
+                    <!-- วิธีรับอาหาร: จัดส่งโดยไรเดอร์ หรือ มารับเองที่ร้าน -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">วิธีรับอาหาร*</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="border-2 border-gray-200 has-[:checked]:border-green-500 has-[:checked]:bg-green-50 rounded-lg p-3 text-center cursor-pointer block">
+                                <input type="radio" name="food-fulfillment" value="delivery" onchange="updateFoodFulfillment()" class="mb-1" checked>
+                                <div class="text-sm font-bold text-gray-800">🛵 จัดส่งโดยไรเดอร์</div>
+                                <div class="text-xs text-gray-500">กรุงเทพ/ปริมณฑล</div>
+                            </label>
+                            <label class="border-2 border-gray-200 has-[:checked]:border-green-500 has-[:checked]:bg-green-50 rounded-lg p-3 text-center cursor-pointer block">
+                                <input type="radio" name="food-fulfillment" value="pickup" onchange="updateFoodFulfillment()" class="mb-1">
+                                <div class="text-sm font-bold text-gray-800">🏪 รับเองที่ร้าน</div>
+                                <div class="pay-red text-xs font-bold">ต้องโอนก่อน</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="food-pickup-note" class="hidden mb-5 p-3 rounded-lg bg-amber-50 border border-amber-300 text-sm text-gray-700">
+                        📍 มารับเองที่ <span class="font-bold" id="food-pickup-address">ยาตีมทีวี</span>
+                    </div>
+
+                    <div id="food-address-block" class="mb-5">
                         <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่งของคุณ (ปักหมุดบ้าน)*</label>
                         <textarea id="food-address" required oninput="checkFoodAddressArea()" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500" rows="3" placeholder="กรุณากรอกที่อยู่ชัดเจน มีคำว่ากรุงเทพหรือกทม. เพื่อให้ไรเดอร์มารับอาหารไปส่งได้ถูกค่ะ"></textarea>
                         <p id="food-address-warning" class="hidden text-xs text-red-600 mt-1 font-bold">⚠️ เมนูอาหารส่งเฉพาะในเขตกรุงเทพ/ปริมณฑลเท่านั้น กรุณาระบุที่อยู่ให้มีคำว่า "กรุงเทพ" หรือ "กทม." ด้วยค่ะ</p>
@@ -233,10 +254,14 @@
                         <input type="tel" id="nw-phone" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     </div>
 
-                    <div class="mb-5">
+                    <div id="nw-address-block" class="mb-5">
                         <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (ทั่วประเทศ)*</label>
                         <textarea id="nw-address" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" rows="3" placeholder="บ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"></textarea>
                         <p class="text-xs text-gray-500 mt-1">*แอดมินจะติดต่อกลับเพื่อแจ้งค่าจัดส่งตามพื้นที่และติดตามพัสดุให้ค่ะ</p>
+                    </div>
+
+                    <div id="nw-pickup-note" class="hidden mb-5 p-3 rounded-lg bg-amber-50 border border-amber-300 text-sm text-gray-700">
+                        📍 มารับเองที่ <span class="font-bold" id="nw-pickup-address">ยาตีมทีวี</span> (โอนชำระก่อน ไม่มีค่าจัดส่ง)
                     </div>
 
                     <div class="mb-4">
@@ -251,6 +276,11 @@
                                 <input type="radio" name="nw-payment-method" value="transfer" onchange="updateNwPaymentUI()" class="mb-1" checked>
                                 <div class="pay-red text-sm font-bold text-gray-800">โอนเงิน</div>
                                 <div class="pay-red text-xs text-gray-500">จัดส่งฟรี</div>
+                            </label>
+                            <label class="col-span-2 border-2 border-gray-200 has-[:checked]:border-green-500 has-[:checked]:bg-green-50 rounded-lg p-3 text-center cursor-pointer block">
+                                <input type="radio" name="nw-payment-method" value="pickup" onchange="updateNwPaymentUI()" class="mb-1">
+                                <span class="text-sm font-bold text-gray-800">🏪 รับเองที่ยาตีมทีวี</span>
+                                <span class="pay-red text-xs font-bold"> (ต้องโอนก่อน • ไม่มีค่าส่ง)</span>
                             </label>
                         </div>
                     </div>
@@ -552,10 +582,18 @@
 
         function updateNwPaymentUI() {
             const method = document.querySelector('input[name="nw-payment-method"]:checked').value;
+            const needSlip = (method === 'transfer' || method === 'pickup'); // รับเองก็ต้องโอนก่อน (แนบสลิป)
+            const isPickup = method === 'pickup';
             document.getElementById('nw-cod-block').classList.toggle('hidden', method !== 'cod');
-            document.getElementById('nw-transfer-block').classList.toggle('hidden', method !== 'transfer');
-            document.getElementById('nw-slip-block').classList.toggle('hidden', method !== 'transfer');
-            document.getElementById('nw-slip').required = (method === 'transfer');
+            document.getElementById('nw-transfer-block').classList.toggle('hidden', !needSlip);
+            document.getElementById('nw-slip-block').classList.toggle('hidden', !needSlip);
+            document.getElementById('nw-slip').required = needSlip;
+            document.getElementById('nw-address-block').classList.toggle('hidden', isPickup);
+            document.getElementById('nw-address').required = !isPickup;
+            document.getElementById('nw-pickup-note').classList.toggle('hidden', !isPickup);
+            if (isPickup && foodSettings && foodSettings.pickupAddress) {
+                document.getElementById('nw-pickup-address').innerText = foodSettings.pickupAddress;
+            }
 
             if (method === 'cod' && nwPaymentSettings) {
                 const total = Number(document.getElementById('total-price-nw').innerText.replace(/,/g, '')) || 0;
@@ -941,17 +979,35 @@
         }
 
         function checkFoodAddressArea() {
+            // รับเองที่ร้าน: ไม่ต้องเช็กพื้นที่ ปุ่มส่งเปิดได้เลย
+            const fm = document.querySelector('input[name="food-fulfillment"]:checked');
+            if (fm && fm.value === 'pickup') { document.getElementById('btn-submit-food').disabled = false; return; }
             const address = document.getElementById('food-address').value.trim();
             const inArea = address.length > 0 && isFoodAddressInArea(address);
             document.getElementById('food-address-warning').classList.toggle('hidden', inArea || address.length === 0);
             document.getElementById('btn-submit-food').disabled = !inArea;
         }
 
+        // สลับวิธีรับอาหาร: จัดส่ง (กรอกที่อยู่ + เช็กพื้นที่) หรือ รับเอง (ซ่อนที่อยู่ + โชว์จุดรับของ)
+        function updateFoodFulfillment() {
+            const isPickup = document.querySelector('input[name="food-fulfillment"]:checked').value === 'pickup';
+            document.getElementById('food-address-block').classList.toggle('hidden', isPickup);
+            document.getElementById('food-pickup-note').classList.toggle('hidden', !isPickup);
+            document.getElementById('food-address').required = !isPickup;
+            if (foodSettings && foodSettings.pickupAddress) {
+                document.getElementById('food-pickup-address').innerText = foodSettings.pickupAddress;
+            }
+            checkFoodAddressArea();
+        }
+
         async function finalSubmitFood(e) {
             e.preventDefault();
 
-            const address = document.getElementById('food-address').value.trim();
-            if (!isFoodAddressInArea(address)) {
+            const isPickup = document.querySelector('input[name="food-fulfillment"]:checked').value === 'pickup';
+            const address = isPickup
+                ? ('🏪 รับเองที่ร้าน (ยาตีมทีวี)' + (foodSettings && foodSettings.pickupAddress ? ' - ' + foodSettings.pickupAddress : ''))
+                : document.getElementById('food-address').value.trim();
+            if (!isPickup && !isFoodAddressInArea(address)) {
                 checkFoodAddressArea();
                 alert('ขออภัยค่ะ 🙏 เมนูอาหารเปิดให้บริการจัดส่งเฉพาะพื้นที่กรุงเทพ/ปริมณฑลเท่านั้น กรุณาระบุที่อยู่ให้มีคำว่า "กรุงเทพ" หรือ "กทม." ด้วยค่ะ');
                 return;
@@ -982,6 +1038,7 @@
                 address: address,
                 items: itemsOrdered,
                 totalPrice: totalPrice,
+                pickup: isPickup,
                 requestId: state.food.requestId
             };
 
@@ -1022,12 +1079,15 @@
             const paymentMethod = document.querySelector('input[name="nw-payment-method"]:checked').value;
             const fullname = document.getElementById('nw-fullname').value.trim();
             const phone = document.getElementById('nw-phone').value.trim();
-            const address = document.getElementById('nw-address').value;
+            const isPickup = paymentMethod === 'pickup';
+            const address = isPickup
+                ? ('🏪 รับเองที่ร้าน (ยาตีมทีวี)' + (foodSettings && foodSettings.pickupAddress ? ' - ' + foodSettings.pickupAddress : ''))
+                : document.getElementById('nw-address').value;
             const slipFile = document.getElementById('nw-slip').files[0];
             // ตัดลูกน้ำออกก่อนส่ง - ดู finalSubmitFood สำหรับรายละเอียดว่าทำไม
             const totalPrice = document.getElementById('total-price-nw').innerText.replace(/,/g, '');
 
-            if (paymentMethod === 'transfer' && !slipFile) {
+            if ((paymentMethod === 'transfer' || isPickup) && !slipFile) {
                 alert('กรุณาแนบสลิปโอนเงินก่อนสั่งซื้อค่ะ');
                 return;
             }
@@ -1053,6 +1113,7 @@
                 totalPrice: totalPrice,
                 paymentMethod: paymentMethod,
                 shippingFee: shippingFee,
+                pickup: isPickup,
                 requestId: state.nw.requestId
             };
 
@@ -1065,7 +1126,9 @@
                         if (res.success) {
                             const msg = paymentMethod === 'cod'
                                 ? 'ชำระเงินสดกับไรเดอร์/พนักงานขนส่งตอนรับพัสดุนะคะ แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุค่ะ'
-                                : 'แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ';
+                                : (isPickup
+                                    ? 'มารับสินค้าเองที่ยาตีมทีวีได้เลยค่ะ แอดมินจะติดต่อยืนยันและนัดเวลารับของนะคะ'
+                                    : 'แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ');
                             document.getElementById('nw-order-section').classList.add('hidden');
                             document.getElementById('nw-success-order-id').innerText = 'ออเดอร์: ' + res.orderId;
                             document.getElementById('nw-success-message').innerText = msg;
