@@ -47,6 +47,11 @@
             <div id="food-menu-section" class="hidden">
                 <div id="food-preorder-note" class="hidden mb-4 p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-sm font-semibold text-center"></div>
                 <h2 class="text-lg font-bold mb-4 text-gray-800">🍱 เลือกรายการอาหาร</h2>
+                <div id="food-category-filter" class="flex gap-2 mb-4 overflow-x-auto pb-1">
+                    <button type="button" onclick="setFoodCategory('all', this)" class="food-cat-btn px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap bg-green-600 text-white shadow">ทั้งหมด</button>
+                    <button type="button" onclick="setFoodCategory('อาหารคาว', this)" class="food-cat-btn px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap bg-gray-200 text-gray-700">🍛 อาหารคาว</button>
+                    <button type="button" onclick="setFoodCategory('อาหารหวานทานเล่น', this)" class="food-cat-btn px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap bg-gray-200 text-gray-700">🍨 หวาน/ทานเล่น</button>
+                </div>
                 <div id="food-menu-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
 
                 <div class="fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg border-t z-50">
@@ -499,6 +504,21 @@
             document.getElementById('panel-nw').classList.toggle('hidden', tab !== 'nw');
         }
 
+        // filter หมวดอาหาร (คาว/หวานทานเล่น) - โชว์/ซ่อนการ์ดตาม data-category ไม่แตะ state/ตะกร้า
+        // (การ์ดถูกสร้างไว้ครบทุกหมวดแล้ว การกรองเป็นแค่ระดับการแสดงผล cart ยังอ้างอิงเมนูเต็มได้ปกติ)
+        function setFoodCategory(cat, btn) {
+            document.querySelectorAll('.food-cat-btn').forEach(b => {
+                b.classList.remove('bg-green-600', 'text-white', 'shadow');
+                b.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            btn.classList.add('bg-green-600', 'text-white', 'shadow');
+            btn.classList.remove('bg-gray-200', 'text-gray-700');
+            document.querySelectorAll('#food-menu-container > [data-category]').forEach(card => {
+                const c = card.getAttribute('data-category');
+                card.style.display = (cat === 'all' || c === cat) ? '' : 'none';
+            });
+        }
+
         // ---------------- โหลดสินค้า (public, ไม่ต้องล็อกอิน) ----------------
 
         function loadFoodMenu() {
@@ -542,8 +562,13 @@
                     const ratingHtml = item.ratingCount > 0
                         ? `<button type="button" onclick="openReviewsModal('${item.id}', '${safeName}')" class="text-xs text-yellow-600 font-bold underline decoration-dotted">★ ${item.rating} (${item.ratingCount} รีวิว)</button>`
                         : '';
+                    const promoHtml = item.promo
+                        ? `<div class="mt-1.5 bg-amber-50 border border-amber-300 rounded-md px-2 py-1 text-xs text-amber-800">
+                                <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.price ? ` · <span class="text-red-600 font-bold">พิเศษ ${item.promo.price} บาท</span>` : ''}${item.promo.endDate ? `<div class="text-[10px] text-gray-500">ถึง ${escapeHtml(item.promo.endDate)}</div>` : ''}
+                           </div>`
+                        : '';
                     const itemHtml = `
-                        <div class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
+                        <div data-category="${item.category || ''}" class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
                             <div class="relative flex-shrink-0">
                                 <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" width="96" height="96" loading="lazy" class="w-24 h-24 rounded-lg object-cover">
                                 ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
@@ -552,6 +577,7 @@
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
                                 ${ratingHtml}
                                 <p class="${opts.priceColor} font-bold text-xl mt-1">${item.price} บาท</p>
+                                ${promoHtml}
                             </div>
                             <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
                                 <button onclick="updateCart('${type}', '${item.id}', -1)" class="w-8 h-8 rounded-full bg-white font-bold text-lg shadow">-</button>
