@@ -61,6 +61,8 @@
         /* ป้ายเปิดขาย: ตัวอักษรหลักดำ เฉพาะข้อความในวงเล็บ (วัน-เวลา) เป็นสีแดง */
         #food-preorder-note{ color:#0E2036 !important; }
         #food-preorder-note .preorder-day{ color:#DC2626 !important; }
+        /* จุดที่ระบุให้เป็นสีแดง: หัวข้อช่องทางชำระเงิน, เลขที่บัญชี, สั่งซื้อสำเร็จ */
+        .pay-red, .pay-red *{ color:#DC2626 !important; }
 
         .loader { border-top-color: var(--gold); animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -158,11 +160,11 @@
                     </div>
 
                     <div class="mb-6 p-4 border border-dashed border-green-500 rounded-lg text-center bg-green-50">
-                        <p class="text-sm text-green-700 font-bold mb-2">ช่องทางชำระเงิน ( พร้อมเพย์ )</p>
+                        <p class="pay-red text-sm text-green-700 font-bold mb-2">ช่องทางชำระเงิน ( พร้อมเพย์ )</p>
                         <img id="food-qr-image" src="" alt="QR พร้อมเพย์" class="mx-auto w-40 h-40 mb-2 object-contain hidden">
                         <p class="text-sm text-gray-700">ชื่อบัญชี: <span id="food-bank-account-name" class="font-bold">-</span></p>
                         <p class="text-sm text-gray-700">ธนาคาร: <span id="food-bank-name" class="font-bold">-</span></p>
-                        <p class="text-sm text-gray-700">เลขที่บัญชี: <span id="food-bank-account-number" class="font-bold">-</span></p>
+                        <p class="pay-red text-sm text-gray-700">เลขที่บัญชี: <span id="food-bank-account-number" class="font-bold">-</span></p>
                         <p class="text-sm font-bold text-gray-700 mt-2">ยอดเงินที่ต้องโอน: <span class="final-total-food text-xl text-green-600">0</span> บาท</p>
                         <p class="text-xs text-red-500 mt-1">*โอนเฉพาะค่าอาหารเท่านั้น ค่าส่งจ่ายไรเดอร์ในแอปค่ะ</p>
                     </div>
@@ -181,7 +183,7 @@
 
             <div id="food-rider-section" class="hidden bg-white p-6 rounded-lg shadow mb-6 text-center">
                 <p class="text-5xl mb-3">🙏</p>
-                <h2 class="text-xl font-bold text-green-700 mb-2">สั่งซื้อสำเร็จ!</h2>
+                <h2 class="pay-red text-xl font-bold text-green-700 mb-2">สั่งซื้อสำเร็จ!</h2>
                 <p id="food-rider-order-id" class="text-sm text-gray-500 mb-4"></p>
                 <p class="text-gray-600 leading-relaxed mb-6">กรุณารอแอดมินจัดเตรียมออเดอร์สักครู่นะคะ 🙏<br>เมื่อพร้อมจัดส่งแล้ว จะมีปุ่มเรียกรถขึ้นในหน้าติดตามออเดอร์ให้เลยค่ะ</p>
                 <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
@@ -266,7 +268,7 @@
                         <img id="nw-qr-image" src="" alt="QR พร้อมเพย์" class="mx-auto w-40 h-40 mb-2 object-contain hidden">
                         <p class="text-sm text-gray-700">ชื่อบัญชี: <span id="nw-bank-account-name" class="font-bold">-</span></p>
                         <p class="text-sm text-gray-700">ธนาคาร: <span id="nw-bank-name" class="font-bold">-</span></p>
-                        <p class="text-sm text-gray-700">เลขที่บัญชี: <span id="nw-bank-account-number" class="font-bold">-</span></p>
+                        <p class="pay-red text-sm text-gray-700">เลขที่บัญชี: <span id="nw-bank-account-number" class="font-bold">-</span></p>
                         <p class="text-sm font-bold text-gray-700 mt-2">ยอดเงินที่ต้องโอน: <span class="final-total-nw text-xl text-blue-600">0</span> บาท</p>
                     </div>
 
@@ -284,7 +286,7 @@
 
             <div id="nw-order-success" class="hidden bg-white p-6 rounded-lg shadow mb-6 text-center">
                 <p class="text-5xl mb-3">🙏</p>
-                <h2 class="text-xl font-bold text-blue-700 mb-2">สั่งซื้อสำเร็จ!</h2>
+                <h2 class="pay-red text-xl font-bold text-blue-700 mb-2">สั่งซื้อสำเร็จ!</h2>
                 <p id="nw-success-order-id" class="text-sm text-gray-500 mb-4"></p>
                 <p id="nw-success-message" class="text-gray-600 leading-relaxed mb-6"></p>
                 <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
