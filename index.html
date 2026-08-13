@@ -55,9 +55,12 @@
         .text-red-600, .text-red-500, .text-red-700{ color:#d94848 !important; }
         a.underline, .underline{ text-decoration-color:var(--gold); }
 
-        /* ราคาสินค้าในการ์ด (ตัว text-xl ในการ์ด) + ป้าย "เปิดขายเฉพาะวัน" = ตัวอักษรสีแดงเน้น */
+        /* ราคาสินค้าในการ์ด + ยอดรวม = ตัวอักษรสีแดงเน้น */
         #food-menu-container .text-xl, #nw-menu-container .text-xl{ color:#DC2626 !important; }
-        #food-preorder-note{ color:#DC2626 !important; border-color:#DC2626 !important; }
+        #total-price-food, #total-price-nw, .final-total-food, .final-total-nw{ color:#DC2626 !important; }
+        /* ป้ายเปิดขาย: ตัวอักษรหลักดำ เฉพาะข้อความในวงเล็บ (วัน-เวลา) เป็นสีแดง */
+        #food-preorder-note{ color:#0E2036 !important; }
+        #food-preorder-note .preorder-day{ color:#DC2626 !important; }
 
         .loader { border-top-color: var(--gold); animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -524,7 +527,7 @@
                 return;
             }
             note.classList.remove('hidden');
-            note.innerHTML = '📌 ตอนนี้อยู่นอกเวลาเปิดขาย (เปิดขายเฉพาะ<b>วัน' + DAY_NAMES_TH[foodSettings.orderDay] + ' เวลา ' + foodSettings.startHour + ':00 - ' + foodSettings.endHour + ':00 น.</b>) แต่สั่งล่วงหน้าได้เลยค่ะ ออเดอร์จะเข้าคิวรอจัดส่งในรอบเปิดขายถัดไปให้อัตโนมัติ';
+            note.innerHTML = '📌 ตอนนี้อยู่นอกเวลาเปิดขาย <span class="preorder-day font-bold">(เปิดขายเฉพาะวัน' + DAY_NAMES_TH[foodSettings.orderDay] + ' เวลา ' + foodSettings.startHour + ':00 - ' + foodSettings.endHour + ':00 น.)</span> แต่สั่งล่วงหน้าได้เลยค่ะ ออเดอร์จะเข้าคิวรอจัดส่งในรอบเปิดขายถัดไปให้อัตโนมัติ';
         }
 
         function applyNwPaymentSettingsToUI(settings) {
