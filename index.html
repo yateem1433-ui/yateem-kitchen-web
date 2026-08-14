@@ -69,6 +69,11 @@
 
         .loader { border-top-color: var(--gold); animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ป้าย/กล่องโปรโมชั่น: pulse เบาๆ ดึงสายตาให้ลูกค้าสังเกตเห็นและอยากซื้อเพิ่มให้ครบเกณฑ์ */
+        @keyframes promoPulse { 0%,100%{ box-shadow:0 0 0 0 rgba(234,185,52,0.55); } 50%{ box-shadow:0 0 0 6px rgba(234,185,52,0); } }
+        .promo-badge-pulse{ animation: promoPulse 1.8s ease-in-out infinite; }
+        .promo-price-glow{ box-shadow:0 3px 12px rgba(220,38,38,0.45); }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -693,6 +698,7 @@
                             <div class="relative flex-shrink-0">
                                 <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" width="96" height="96" loading="lazy" class="w-24 h-24 rounded-lg object-cover">
                                 ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
+                                ${item.promo ? '<span class="absolute -top-1 -right-1 text-white text-[8px] leading-none font-extrabold px-1.5 py-[3px] rounded shadow-md whitespace-nowrap promo-badge-pulse" style="background:linear-gradient(90deg,#DC2626,#EAB934);">🎉 โปรฯ</span>' : ''}
                             </div>
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
@@ -1189,18 +1195,28 @@
             const hasPromoPrice = item.promo && item.promo.price && item.promo.price > 0;
             const promoActive = hasPromoPrice && qty >= minQty;
 
+            // ราคาพิเศษที่ active แล้ว: ใส่กล่องไฮไลท์ gradient แดง-ทอง ให้เด่นสะดุดตากว่าราคาเต็มปกติมาก ๆ
             const priceHtml = promoActive
-                ? `<p class="mt-1"><span class="line-through text-gray-400 text-sm mr-1">${item.price} บาท</span><span class="${priceColor} font-bold text-xl">${item.promo.price} บาท</span></p>`
+                ? `<div class="mt-1 inline-flex items-baseline gap-2 px-3 py-1.5 rounded-lg promo-price-glow" style="background:linear-gradient(90deg,#DC2626,#EAB934);">
+                        <span class="line-through text-white/70 text-xs">${item.price} บาท</span>
+                        <span class="text-white font-extrabold text-2xl leading-none">${item.promo.price}</span>
+                        <span class="text-white font-bold text-xs">บาท</span>
+                   </div>`
                 : `<p class="${priceColor} font-bold text-xl mt-1">${item.price} บาท</p>`;
 
             let promoHtml = '';
             if (item.promo) {
                 const condHtml = !hasPromoPrice ? '' // มีแค่ข้อความโปรฯ ไม่มีราคาพิเศษ - ไม่ต้องบอกเงื่อนไขจำนวน
                     : promoActive
-                        ? `<div class="text-green-700 font-bold mt-0.5">✅ ได้ราคาพิเศษแล้ว!</div>`
-                        : `<div class="mt-0.5">ซื้อครบ ${minQty} ชิ้น เหลือชิ้นละ ${item.promo.price} บาท (อีก ${minQty - qty} ชิ้น)</div>`;
-                promoHtml = `<div class="mt-1.5 ${promoActive ? 'bg-green-50 border-green-300 text-green-800' : 'bg-amber-50 border-amber-300 text-amber-800'} border rounded-md px-2 py-1 text-xs">
-                        <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] text-gray-500">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
+                        ? `<div class="font-extrabold mt-0.5">✅ ได้ราคาพิเศษแล้ว!</div>`
+                        : `<div class="font-bold mt-0.5">ซื้อครบ ${minQty} ชิ้น เหลือชิ้นละ <span class="text-red-700">${item.promo.price} บาท</span> (อีก ${minQty - qty} ชิ้น)</div>`;
+                // ยังไม่ครบเกณฑ์: กล่องทองสว่าง+ขอบหนา+pulse ดึงสายตาให้ลูกค้าอยากซื้อเพิ่ม / ครบแล้ว: กล่องเขียวยืนยัน
+                const boxClass = promoActive
+                    ? 'bg-green-600 border-green-700 text-white'
+                    : 'text-amber-900 promo-badge-pulse';
+                const boxStyle = promoActive ? '' : 'background:linear-gradient(90deg,#FDE68A,#FCD34D);border-color:#EAB934;';
+                promoHtml = `<div class="mt-1.5 border-2 rounded-md px-2.5 py-1.5 text-xs ${boxClass}" style="${boxStyle}">
+                        <span class="font-extrabold text-sm">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] opacity-80">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
                         ${condHtml}
                    </div>`;
             }
