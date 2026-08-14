@@ -20,6 +20,9 @@
         }
         html, body{ background:var(--bg) !important; color:var(--navy); font-family:'Kanit',sans-serif; }
         body, button, input, textarea, select, h1, h2, h3, h4, p, span, a, label, div{ font-family:'Kanit',sans-serif; }
+        /* กันข้อความไทยถูกตัดกลางคำตอนจอแคบ (ไทยไม่มีช่องว่างระหว่างคำ เบราว์เซอร์บางตัวตัดมั่ว) -
+           keep-all = ไม่ตัดกลางคำถ้าไม่จำเป็น, break-word = fallback ตัดได้ถ้าล้นจริงๆ กัน layout พัง */
+        body, h1, h2, h3, h4, p, span, a, label, button{ word-break: keep-all; overflow-wrap: break-word; }
 
         /* การ์ด/พื้นผิว: ขาวสะอาด + เส้นขอบเทาอ่อน */
         .bg-white{ background:var(--card) !important; border:1px solid var(--line); }
@@ -685,9 +688,15 @@
                     const ratingHtml = item.ratingCount > 0
                         ? `<button type="button" onclick="openReviewsModal('${item.id}', '${safeName}')" class="text-xs text-yellow-600 font-bold underline decoration-dotted">★ ${item.rating} (${item.ratingCount} รีวิว)</button>`
                         : '';
+                    // มีราคาโปรฯ (promo.price) = ตะกร้าคิดราคานี้แทนราคาเต็มต่อชิ้น (ดู effectivePrice/calculateTotal)
+                    // โชว์ราคาเต็มขีดฆ่า + ราคาโปรฯ เป็นตัวหลัก ไม่พูดราคาซ้ำในกล่องข้อความโปรฯ ด้านล่าง
+                    const hasPromoPrice = item.promo && (item.promo.price || item.promo.price === 0) && item.promo.price > 0;
+                    const priceHtml = hasPromoPrice
+                        ? `<p class="mt-1"><span class="line-through text-gray-400 text-sm mr-1">${item.price} บาท</span><span class="${opts.priceColor} font-bold text-xl">${item.promo.price} บาท</span></p>`
+                        : `<p class="${opts.priceColor} font-bold text-xl mt-1">${item.price} บาท</p>`;
                     const promoHtml = item.promo
                         ? `<div class="mt-1.5 bg-amber-50 border border-amber-300 rounded-md px-2 py-1 text-xs text-amber-800">
-                                <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.price ? ` · <span class="text-red-600 font-bold">พิเศษ ${item.promo.price} บาท</span>` : ''}${item.promo.endDate ? `<div class="text-[10px] text-gray-500">ถึง ${escapeHtml(item.promo.endDate)}</div>` : ''}
+                                <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] text-gray-500">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
                            </div>`
                         : '';
                     const itemHtml = `
@@ -699,7 +708,7 @@
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
                                 ${ratingHtml}
-                                <p class="${opts.priceColor} font-bold text-xl mt-1">${item.price} บาท</p>
+                                ${priceHtml}
                                 ${promoHtml}
                             </div>
                             <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
@@ -1165,13 +1174,18 @@
             calculateTotal(type);
         }
 
+        // ราคาที่ใช้จริงต่อชิ้น: ถ้ามีราคาโปรฯ (promo.price) ใช้ราคานั้นแทนราคาเต็ม - ใช้ร่วมกันทั้งคำนวณยอดรวมและตอนส่งออเดอร์
+        function effectivePrice(item) {
+            return (item.promo && item.promo.price && item.promo.price > 0) ? item.promo.price : item.price;
+        }
+
         function calculateTotal(type) {
             const s = state[type];
             let total = 0;
             let hasItems = false;
             s.menuData.forEach(item => {
                 if (s.cart[item.id] > 0) {
-                    total += item.price * s.cart[item.id];
+                    total += effectivePrice(item) * s.cart[item.id];
                     hasItems = true;
                 }
             });
