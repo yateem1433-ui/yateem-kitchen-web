@@ -698,7 +698,7 @@
                             <div class="relative flex-shrink-0">
                                 <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" width="96" height="96" loading="lazy" class="w-24 h-24 rounded-lg object-cover">
                                 ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
-                                ${item.promo ? '<span class="absolute -top-1 -right-1 text-white text-[8px] leading-none font-extrabold px-1.5 py-[3px] rounded shadow-md whitespace-nowrap promo-badge-pulse" style="background:linear-gradient(90deg,#DC2626,#EAB934);">🎉 โปรฯ</span>' : ''}
+                                ${item.promo ? '<span class="absolute -bottom-1 -right-1 text-white text-[8px] leading-none font-extrabold px-1.5 py-[3px] rounded shadow-md whitespace-nowrap promo-badge-pulse" style="background:linear-gradient(90deg,#DC2626,#EAB934);">🎉 โปรฯ</span>' : ''}
                             </div>
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
@@ -1177,39 +1177,40 @@
             calculateTotal(type);
         }
 
-        // ราคาที่ใช้จริงต่อชิ้น: มีราคาโปรฯ (promo.price) และซื้อถึงจำนวนขั้นต่ำ (promo.minQty) แล้วเท่านั้นถึงใช้ราคานี้
-        // ซื้อไม่ถึงเกณฑ์ยังคงราคาเต็มตามปกติ - ใช้ร่วมกันทั้งคำนวณยอดรวมและแสดงผลราคาในการ์ด (renderPriceBlock)
+        // คืนราคา "รวมทั้งหมด" ของสินค้านี้ตามจำนวนที่อยู่ในตะกร้า (promo.price = ราคารวมทั้งชุด เช่น "3 ชิ้น 100 บาท"
+        // ไม่ใช่ราคาต่อชิ้น) หารเป็นชุดตาม minQty แล้วคิดชุดละ promo.price ส่วนที่เหลือไม่ครบชุดคิดราคาเต็มตามปกติ
+        // เช่น minQty=3, promo.price=100, price=35: ซื้อ 4 ชิ้น = 1 ชุด(100) + เศษ 1 ชิ้น(35) = 135 บาท
         function effectivePrice(item, qty) {
-            const minQty = (item.promo && item.promo.minQty) ? item.promo.minQty : 2;
-            if (item.promo && item.promo.price && item.promo.price > 0 && qty >= minQty) {
-                return item.promo.price;
-            }
-            return item.price;
+            const hasPromoPrice = item.promo && item.promo.price && item.promo.price > 0;
+            if (!hasPromoPrice) return item.price * qty;
+            const minQty = item.promo.minQty || 2;
+            const sets = Math.floor(qty / minQty);
+            const remainder = qty % minQty;
+            return sets * item.promo.price + remainder * item.price;
         }
 
         // สร้าง HTML ราคา + กล่องข้อความโปรฯ ของการ์ดเมนู 1 ชิ้น ตามจำนวนที่อยู่ในตะกร้าตอนนี้
         // เรียกทั้งตอน render ครั้งแรก (qty=0 เสมอ) และตอน updateCart ทุกครั้งที่กด +/- เพื่ออัปเดตราคาแบบสด
+        // promo.price = ราคารวมทั้งชุด (เช่น "3 ชิ้น 100 บาท") ไม่ใช่ราคาต่อชิ้น - จึงโชว์ราคาเต็มต่อชิ้นเป็นฐานเสมอ
+        // แล้วบอกส่วนลด/เงื่อนไขเป็นข้อความแยก ไม่ทำให้ราคาต่อชิ้นดูเหมือนลดจริง (เพราะต่อชิ้นจริงแปรผันเมื่อมีเศษ)
         function renderPriceBlock(type, item, priceColor) {
             const qty = state[type].cart[item.id] || 0;
             const minQty = (item.promo && item.promo.minQty) ? item.promo.minQty : 2;
             const hasPromoPrice = item.promo && item.promo.price && item.promo.price > 0;
-            const promoActive = hasPromoPrice && qty >= minQty;
+            const sets = hasPromoPrice ? Math.floor(qty / minQty) : 0;
+            const remainder = hasPromoPrice ? qty % minQty : 0;
+            const promoActive = sets > 0;
+            const fullSetPrice = hasPromoPrice ? item.price * minQty : 0;
+            const saveAmount = hasPromoPrice ? (fullSetPrice - item.promo.price) : 0;
 
-            // ราคาพิเศษที่ active แล้ว: ใส่กล่องไฮไลท์ gradient แดง-ทอง ให้เด่นสะดุดตากว่าราคาเต็มปกติมาก ๆ
-            const priceHtml = promoActive
-                ? `<div class="mt-1 inline-flex items-baseline gap-2 px-3 py-1.5 rounded-lg promo-price-glow" style="background:linear-gradient(90deg,#DC2626,#EAB934);">
-                        <span class="line-through text-white/70 text-xs">${item.price} บาท</span>
-                        <span class="text-white font-extrabold text-2xl leading-none">${item.promo.price}</span>
-                        <span class="text-white font-bold text-xs">บาท</span>
-                   </div>`
-                : `<p class="${priceColor} font-bold text-xl mt-1">${item.price} บาท</p>`;
+            const priceHtml = `<p class="${priceColor} font-bold text-xl mt-1">${item.price} บาท</p>`;
 
             let promoHtml = '';
-            if (item.promo) {
-                const condHtml = !hasPromoPrice ? '' // มีแค่ข้อความโปรฯ ไม่มีราคาพิเศษ - ไม่ต้องบอกเงื่อนไขจำนวน
-                    : promoActive
-                        ? `<div class="font-extrabold mt-0.5">✅ ได้ราคาพิเศษแล้ว!</div>`
-                        : `<div class="font-bold mt-0.5">ซื้อครบ ${minQty} ชิ้น เหลือชิ้นละ <span class="text-red-700">${item.promo.price} บาท</span> (อีก ${minQty - qty} ชิ้น)</div>`;
+            if (hasPromoPrice) {
+                const condHtml = promoActive
+                    ? `<div class="font-extrabold mt-0.5">✅ ได้ส่วนลด ${sets} เซ็ต ประหยัดรวม ${saveAmount * sets} บาท!</div>`
+                        + (remainder > 0 ? `<div class="mt-0.5 font-normal">ซื้อเพิ่มอีก ${minQty - remainder} ชิ้น รับส่วนลดเซ็ตถัดไป</div>` : '')
+                    : `<div class="font-bold mt-0.5">ซื้อครบ ${minQty} ชิ้น จ่ายรวมแค่ <span class="text-red-700">${item.promo.price} บาท</span> (ปกติ ${fullSetPrice} บาท ประหยัด ${saveAmount} บาท) — อีก ${minQty - qty} ชิ้น</div>`;
                 // ยังไม่ครบเกณฑ์: กล่องทองสว่าง+ขอบหนา+pulse ดึงสายตาให้ลูกค้าอยากซื้อเพิ่ม / ครบแล้ว: กล่องเขียวยืนยัน
                 const boxClass = promoActive
                     ? 'bg-green-600 border-green-700 text-white'
@@ -1218,6 +1219,11 @@
                 promoHtml = `<div class="mt-1.5 border-2 rounded-md px-2.5 py-1.5 text-xs ${boxClass}" style="${boxStyle}">
                         <span class="font-extrabold text-sm">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] opacity-80">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
                         ${condHtml}
+                   </div>`;
+            } else if (item.promo) {
+                // มีแค่ข้อความโปรฯ ไม่ได้ตั้งราคาพิเศษ - โชว์ป้ายเฉยๆ ไม่มีเงื่อนไขจำนวน/ราคา
+                promoHtml = `<div class="mt-1.5 bg-amber-50 border border-amber-300 rounded-md px-2 py-1 text-xs text-amber-800">
+                        <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] text-gray-500">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
                    </div>`;
             }
             return priceHtml + promoHtml;
@@ -1230,7 +1236,7 @@
             s.menuData.forEach(item => {
                 const qty = s.cart[item.id] || 0;
                 if (qty > 0) {
-                    total += effectivePrice(item, qty) * qty;
+                    total += effectivePrice(item, qty); // คืนราคารวมของ item นี้แล้ว ไม่ต้องคูณ qty ซ้ำ
                     hasItems = true;
                 }
             });
