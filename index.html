@@ -688,17 +688,6 @@
                     const ratingHtml = item.ratingCount > 0
                         ? `<button type="button" onclick="openReviewsModal('${item.id}', '${safeName}')" class="text-xs text-yellow-600 font-bold underline decoration-dotted">★ ${item.rating} (${item.ratingCount} รีวิว)</button>`
                         : '';
-                    // มีราคาโปรฯ (promo.price) = ตะกร้าคิดราคานี้แทนราคาเต็มต่อชิ้น (ดู effectivePrice/calculateTotal)
-                    // โชว์ราคาเต็มขีดฆ่า + ราคาโปรฯ เป็นตัวหลัก ไม่พูดราคาซ้ำในกล่องข้อความโปรฯ ด้านล่าง
-                    const hasPromoPrice = item.promo && (item.promo.price || item.promo.price === 0) && item.promo.price > 0;
-                    const priceHtml = hasPromoPrice
-                        ? `<p class="mt-1"><span class="line-through text-gray-400 text-sm mr-1">${item.price} บาท</span><span class="${opts.priceColor} font-bold text-xl">${item.promo.price} บาท</span></p>`
-                        : `<p class="${opts.priceColor} font-bold text-xl mt-1">${item.price} บาท</p>`;
-                    const promoHtml = item.promo
-                        ? `<div class="mt-1.5 bg-amber-50 border border-amber-300 rounded-md px-2 py-1 text-xs text-amber-800">
-                                <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] text-gray-500">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
-                           </div>`
-                        : '';
                     const itemHtml = `
                         <div data-category="${item.category || ''}" class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
                             <div class="relative flex-shrink-0">
@@ -708,8 +697,7 @@
                             <div class="flex-1">
                                 <h3 class="font-semibold text-lg text-gray-800">${item.name}</h3>
                                 ${ratingHtml}
-                                ${priceHtml}
-                                ${promoHtml}
+                                <div id="price-block-${type}-${item.id}">${renderPriceBlock(type, item, opts.priceColor)}</div>
                             </div>
                             <div class="flex items-center gap-3 border border-gray-200 rounded-full p-2 bg-gray-50">
                                 <button onclick="updateCart('${type}', '${item.id}', -1)" class="w-8 h-8 rounded-full bg-white font-bold text-lg shadow">-</button>
@@ -1171,12 +1159,52 @@
             if (s.cart[itemId] < 0) s.cart[itemId] = 0;
 
             document.getElementById(`qty-${type}-${itemId}`).innerText = s.cart[itemId];
+
+            // อัปเดตราคา/ป้ายโปรฯ ของการ์ดนี้ให้ตรงกับจำนวนล่าสุด (ราคาพิเศษมีผลก็ต่อเมื่อซื้อครบ minQty เท่านั้น)
+            const priceBlock = document.getElementById(`price-block-${type}-${itemId}`);
+            const item = s.menuData.find(x => String(x.id) === String(itemId));
+            if (priceBlock && item) {
+                const priceColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
+                priceBlock.innerHTML = renderPriceBlock(type, item, priceColor);
+            }
+
             calculateTotal(type);
         }
 
-        // ราคาที่ใช้จริงต่อชิ้น: ถ้ามีราคาโปรฯ (promo.price) ใช้ราคานั้นแทนราคาเต็ม - ใช้ร่วมกันทั้งคำนวณยอดรวมและตอนส่งออเดอร์
-        function effectivePrice(item) {
-            return (item.promo && item.promo.price && item.promo.price > 0) ? item.promo.price : item.price;
+        // ราคาที่ใช้จริงต่อชิ้น: มีราคาโปรฯ (promo.price) และซื้อถึงจำนวนขั้นต่ำ (promo.minQty) แล้วเท่านั้นถึงใช้ราคานี้
+        // ซื้อไม่ถึงเกณฑ์ยังคงราคาเต็มตามปกติ - ใช้ร่วมกันทั้งคำนวณยอดรวมและแสดงผลราคาในการ์ด (renderPriceBlock)
+        function effectivePrice(item, qty) {
+            const minQty = (item.promo && item.promo.minQty) ? item.promo.minQty : 2;
+            if (item.promo && item.promo.price && item.promo.price > 0 && qty >= minQty) {
+                return item.promo.price;
+            }
+            return item.price;
+        }
+
+        // สร้าง HTML ราคา + กล่องข้อความโปรฯ ของการ์ดเมนู 1 ชิ้น ตามจำนวนที่อยู่ในตะกร้าตอนนี้
+        // เรียกทั้งตอน render ครั้งแรก (qty=0 เสมอ) และตอน updateCart ทุกครั้งที่กด +/- เพื่ออัปเดตราคาแบบสด
+        function renderPriceBlock(type, item, priceColor) {
+            const qty = state[type].cart[item.id] || 0;
+            const minQty = (item.promo && item.promo.minQty) ? item.promo.minQty : 2;
+            const hasPromoPrice = item.promo && item.promo.price && item.promo.price > 0;
+            const promoActive = hasPromoPrice && qty >= minQty;
+
+            const priceHtml = promoActive
+                ? `<p class="mt-1"><span class="line-through text-gray-400 text-sm mr-1">${item.price} บาท</span><span class="${priceColor} font-bold text-xl">${item.promo.price} บาท</span></p>`
+                : `<p class="${priceColor} font-bold text-xl mt-1">${item.price} บาท</p>`;
+
+            let promoHtml = '';
+            if (item.promo) {
+                const condHtml = !hasPromoPrice ? '' // มีแค่ข้อความโปรฯ ไม่มีราคาพิเศษ - ไม่ต้องบอกเงื่อนไขจำนวน
+                    : promoActive
+                        ? `<div class="text-green-700 font-bold mt-0.5">✅ ได้ราคาพิเศษแล้ว!</div>`
+                        : `<div class="mt-0.5">ซื้อครบ ${minQty} ชิ้น เหลือชิ้นละ ${item.promo.price} บาท (อีก ${minQty - qty} ชิ้น)</div>`;
+                promoHtml = `<div class="mt-1.5 ${promoActive ? 'bg-green-50 border-green-300 text-green-800' : 'bg-amber-50 border-amber-300 text-amber-800'} border rounded-md px-2 py-1 text-xs">
+                        <span class="font-bold">🎉 ${escapeHtml(item.promo.text)}</span>${item.promo.endDate ? ` <span class="text-[10px] text-gray-500">(ถึง ${escapeHtml(item.promo.endDate)})</span>` : ''}
+                        ${condHtml}
+                   </div>`;
+            }
+            return priceHtml + promoHtml;
         }
 
         function calculateTotal(type) {
@@ -1184,8 +1212,9 @@
             let total = 0;
             let hasItems = false;
             s.menuData.forEach(item => {
-                if (s.cart[item.id] > 0) {
-                    total += effectivePrice(item) * s.cart[item.id];
+                const qty = s.cart[item.id] || 0;
+                if (qty > 0) {
+                    total += effectivePrice(item, qty) * qty;
                     hasItems = true;
                 }
             });
