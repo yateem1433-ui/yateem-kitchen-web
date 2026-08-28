@@ -137,12 +137,18 @@
                 </div>
                 <div id="food-menu-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
 
-                <div class="fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg border-t z-50">
-                    <div class="flex justify-between items-center container mx-auto gap-2">
-                        <p class="text-lg font-semibold">ยอดรวม: <span id="total-price-food" class="text-green-600 text-xl">0</span> บาท</p>
-                        <div class="flex items-center gap-2">
-                            <button onclick="cancelCheckout('food')" id="btn-cancel-food" class="hidden bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold">ยกเลิก</button>
-                            <button onclick="proceedToCheckout('food')" id="btn-next-food" class="bg-gray-400 text-white px-6 py-2 rounded-full font-bold" disabled>ยืนยันออเดอร์</button>
+                <div class="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t z-50">
+                    <div id="cart-panel-food" class="hidden overflow-y-auto container mx-auto px-4 py-3 border-b" style="max-height:45vh;"></div>
+                    <div class="p-3">
+                        <div class="flex justify-between items-center container mx-auto gap-2">
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <button type="button" onclick="toggleCart('food')" class="flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-2 font-bold text-sm whitespace-nowrap">🛒 <span id="cart-count-food">0</span></button>
+                                <p class="text-sm font-semibold whitespace-nowrap">รวม <span id="total-price-food" class="text-green-600 text-lg">0</span> บ.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="cancelCheckout('food')" id="btn-cancel-food" class="hidden bg-gray-200 text-gray-700 px-3 py-2 rounded-full font-bold text-sm">ยกเลิก</button>
+                                <button onclick="proceedToCheckout('food')" id="btn-next-food" class="bg-gray-400 text-white px-5 py-2 rounded-full font-bold text-sm" disabled>ยืนยันออเดอร์</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -237,12 +243,18 @@
                 <h2 class="text-lg font-bold mb-4 text-gray-800">📦 เลือกสินค้าแห้ง (จัดส่งทั่วประเทศ)</h2>
                 <div id="nw-menu-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
 
-                <div class="fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg border-t z-50">
-                    <div class="flex justify-between items-center container mx-auto gap-2">
-                        <p class="text-lg font-semibold">ยอดรวม: <span id="total-price-nw" class="text-blue-600 text-xl">0</span> บาท</p>
-                        <div class="flex items-center gap-2">
-                            <button onclick="cancelCheckout('nw')" id="btn-cancel-nw" class="hidden bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-bold">ยกเลิก</button>
-                            <button onclick="proceedToCheckout('nw')" id="btn-next-nw" class="bg-gray-400 text-white px-6 py-2 rounded-full font-bold" disabled>ยืนยันออเดอร์</button>
+                <div class="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t z-50">
+                    <div id="cart-panel-nw" class="hidden overflow-y-auto container mx-auto px-4 py-3 border-b" style="max-height:45vh;"></div>
+                    <div class="p-3">
+                        <div class="flex justify-between items-center container mx-auto gap-2">
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <button type="button" onclick="toggleCart('nw')" class="flex items-center gap-1 bg-blue-100 text-blue-800 rounded-full px-3 py-2 font-bold text-sm whitespace-nowrap">🛒 <span id="cart-count-nw">0</span></button>
+                                <p class="text-sm font-semibold whitespace-nowrap">รวม <span id="total-price-nw" class="text-blue-600 text-lg">0</span> บ.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="cancelCheckout('nw')" id="btn-cancel-nw" class="hidden bg-gray-200 text-gray-700 px-3 py-2 rounded-full font-bold text-sm">ยกเลิก</button>
+                                <button onclick="proceedToCheckout('nw')" id="btn-next-nw" class="bg-gray-400 text-white px-5 py-2 rounded-full font-bold text-sm" disabled>ยืนยันออเดอร์</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -640,6 +652,11 @@
 
             document.getElementById('panel-food').classList.toggle('hidden', tab !== 'food');
             document.getElementById('panel-nw').classList.toggle('hidden', tab !== 'nw');
+
+            const pFood = document.getElementById('cart-panel-food');
+            if (pFood) pFood.classList.add('hidden');
+            const pNw = document.getElementById('cart-panel-nw');
+            if (pNw) pNw.classList.add('hidden');
         }
 
         // filter หมวดอาหาร (คาว/หวานทานเล่น) - โชว์/ซ่อนการ์ดตาม data-category ไม่แตะ state/ตะกร้า
@@ -1270,30 +1287,142 @@
         function calculateTotal(type) {
             const s = state[type];
             let total = 0;
+            let totalCount = 0;
             let hasItems = false;
             s.menuData.forEach(item => {
                 const qty = s.cart[item.id] || 0;
                 if (qty > 0) {
                     total += effectivePrice(item, qty); // คืนราคารวมของ item นี้แล้ว ไม่ต้องคูณ qty ซ้ำ
+                    totalCount += qty;
                     hasItems = true;
                 }
             });
 
-            document.getElementById('total-price-' + type).innerText = total.toLocaleString();
+            const countEl = document.getElementById('cart-count-' + type);
+            if (countEl) countEl.innerText = totalCount;
+
+            const totalEl = document.getElementById('total-price-' + type);
+            if (totalEl) totalEl.innerText = total.toLocaleString();
+
             const btnNext = document.getElementById('btn-next-' + type);
             const activeColor = type === 'food' ? 'bg-green-600' : 'bg-blue-600';
-            if (hasItems) {
-                btnNext.disabled = false;
-                btnNext.classList.remove('bg-gray-400');
-                btnNext.classList.add(activeColor);
-            } else {
-                btnNext.disabled = true;
-                btnNext.classList.remove(activeColor);
-                btnNext.classList.add('bg-gray-400');
+            if (btnNext) {
+                if (hasItems) {
+                    btnNext.disabled = false;
+                    btnNext.classList.remove('bg-gray-400');
+                    btnNext.classList.add(activeColor);
+                } else {
+                    btnNext.disabled = true;
+                    btnNext.classList.remove(activeColor);
+                    btnNext.classList.add('bg-gray-400');
+                }
+            }
+
+            // ถ้าแผงรายการในตะกร้ากำลังเปิดอยู่ ให้อัปเดตรายการแบบสดด้วย
+            const panel = document.getElementById('cart-panel-' + type);
+            if (panel && !panel.classList.contains('hidden')) {
+                renderCartPanel(type);
             }
         }
 
+        function toggleCart(type) {
+            const panel = document.getElementById('cart-panel-' + type);
+            if (!panel) return;
+            const isHidden = panel.classList.contains('hidden');
+            if (isHidden) {
+                renderCartPanel(type);
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        function clearCart(type) {
+            const s = state[type];
+            s.cart = {};
+            saveCarts();
+            s.menuData.forEach(item => {
+                const qtySpan = document.getElementById(`qty-${type}-${item.id}`);
+                if (qtySpan) qtySpan.innerText = 0;
+                const priceBlock = document.getElementById(`price-block-${type}-${item.id}`);
+                if (priceBlock) {
+                    const priceColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
+                    priceBlock.innerHTML = renderPriceBlock(type, item, priceColor);
+                }
+            });
+            calculateTotal(type);
+        }
+
+        function renderCartPanel(type) {
+            const panel = document.getElementById('cart-panel-' + type);
+            if (!panel) return;
+            const s = state[type];
+            const itemsInCart = s.menuData.filter(item => (s.cart[item.id] || 0) > 0);
+
+            if (itemsInCart.length === 0) {
+                panel.innerHTML = `
+                    <div class="text-center py-4 text-gray-500">
+                        <p class="text-2xl mb-1">🛒</p>
+                        <p class="text-sm font-medium">ยังไม่มีสินค้าในตะกร้า</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const activeBtnColor = type === 'food' ? 'bg-green-500' : 'bg-blue-500';
+            const activeTextColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
+
+            let itemsHtml = itemsInCart.map(item => {
+                const qty = s.cart[item.id];
+                const itemTotal = effectivePrice(item, qty);
+                const hasPromoPrice = item.promo && item.promo.price && item.promo.price > 0;
+                const minQty = (item.promo && item.promo.minQty) ? item.promo.minQty : 2;
+                const sets = hasPromoPrice ? Math.floor(qty / minQty) : 0;
+                const promoNotice = (hasPromoPrice && sets > 0)
+                    ? `<span class="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded font-bold">โปรฯ ${sets} ชุด</span>`
+                    : '';
+
+                return `
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0 gap-2">
+                        <div class="flex items-center gap-2 flex-1 min-w-0">
+                            <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${escapeHtml(item.name)}" class="w-10 h-10 rounded object-cover flex-shrink-0">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-semibold text-gray-800 truncate">${escapeHtml(item.name)}</p>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-xs text-gray-500">@${item.price} บ.</span>
+                                    ${promoNotice}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-1.5 py-0.5">
+                                <button type="button" onclick="updateCart('${type}', '${item.id}', -1)" class="w-6 h-6 rounded-full bg-white font-bold text-sm shadow flex items-center justify-center leading-none">-</button>
+                                <span class="font-bold text-sm w-5 text-center">${qty}</span>
+                                <button type="button" onclick="updateCart('${type}', '${item.id}', 1)" class="w-6 h-6 rounded-full ${activeBtnColor} text-white font-bold text-sm shadow flex items-center justify-center leading-none">+</button>
+                            </div>
+                            <span class="text-sm font-bold ${activeTextColor} w-16 text-right whitespace-nowrap">${itemTotal.toLocaleString()} บ.</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            panel.innerHTML = `
+                <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-200">
+                    <span class="text-xs font-bold text-gray-700 flex items-center gap-1">
+                        <span>🛒 รายการที่เลือก</span>
+                        <span class="bg-gray-200 text-gray-700 rounded-full px-2 py-0.5 text-[10px] font-bold">${itemsInCart.length} รายการ</span>
+                    </span>
+                    <button type="button" onclick="clearCart('${type}')" class="text-xs text-red-500 hover:text-red-700 font-semibold underline">ล้างตะกร้า</button>
+                </div>
+                <div class="space-y-1">
+                    ${itemsHtml}
+                </div>
+            `;
+        }
+
         function showOrderForm(type) {
+            const panel = document.getElementById('cart-panel-' + type);
+            if (panel) panel.classList.add('hidden');
             document.getElementById(type === 'food' ? 'food-menu-section' : 'nw-menu-section').classList.add('hidden');
             document.getElementById(type === 'food' ? 'food-order-section' : 'nw-order-section').classList.remove('hidden');
             const total = document.getElementById('total-price-' + type).innerText;
