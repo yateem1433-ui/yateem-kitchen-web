@@ -447,6 +447,23 @@
             nw: { menuData: [], cart: {}, requestId: null }
         };
 
+        // ตะกร้าพักสินค้า: เก็บตะกร้าไว้ในเครื่องลูกค้า (localStorage) ลูกค้าใส่ของแล้วปิดหน้าไป กลับมาของยังอยู่
+        // ไม่ต้องรีบชำระเงิน - เก็บแค่ {id: จำนวน} ต่อแท็บ (food/nw) ล้างเมื่อสั่งซื้อสำเร็จ
+        const CART_STORAGE_KEY = 'yateemCart';
+        function loadSavedCarts() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '{}');
+                if (saved.food) state.food.cart = saved.food;
+                if (saved.nw) state.nw.cart = saved.nw;
+            } catch (e) { /* อ่าน localStorage ไม่ได้ (โหมดส่วนตัว ฯลฯ) - เริ่มตะกร้าว่างตามปกติ */ }
+        }
+        function saveCarts() {
+            try {
+                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ food: state.food.cart, nw: state.nw.cart }));
+            } catch (e) { /* เขียนไม่ได้ก็ปล่อยไป ตะกร้ายังทำงานในหน้าปัจจุบันได้ */ }
+        }
+        loadSavedCarts();
+
         // สร้างรหัสสุ่มไม่ซ้ำ 1 ค่าต่อการเปิดฟอร์มสั่งซื้อ 1 ครั้ง - ส่งแนบไปกับออเดอร์เพื่อกันกดส่งซ้ำ/retry
         // แล้วได้ออเดอร์ซ้ำ (ฝั่งเซิร์ฟเวอร์เช็ก requestId เดิม คืน orderId เดิมแทนการสร้างใหม่)
         function generateRequestId() {
@@ -716,7 +733,24 @@
                 });
             }
 
+            applyCartToUI(type); // คืนจำนวนที่พักไว้ในตะกร้า (localStorage) กลับมาแสดงบนการ์ด + คิดยอดรวม
             maybeResumeCheckout(type);
+        }
+
+        // คืนสภาพตะกร้าที่เก็บไว้กลับมาบน UI หลัง render เมนูเสร็จ (จำนวน + กล่องราคาโปรฯ + ยอดรวม)
+        function applyCartToUI(type) {
+            const s = state[type];
+            const priceColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
+            s.menuData.forEach(item => {
+                const qty = s.cart[item.id] || 0;
+                const span = document.getElementById(`qty-${type}-${item.id}`);
+                if (span) span.innerText = qty;
+                if (qty > 0) {
+                    const priceBlock = document.getElementById(`price-block-${type}-${item.id}`);
+                    if (priceBlock) priceBlock.innerHTML = renderPriceBlock(type, item, priceColor);
+                }
+            });
+            calculateTotal(type);
         }
 
         function renderFoodMenu(menuData) {
@@ -1052,6 +1086,7 @@
                 callApi('submitOrder', { orderData: orderData, slipBase64: slipBase64, slipName: slipName })
                     .then((res) => {
                         if (res.success) {
+                            state.food.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
                             document.getElementById('food-order-section').classList.add('hidden');
                             document.getElementById('food-rider-order-id').innerText = 'ออเดอร์: ' + res.orderId;
                             document.getElementById('food-rider-section').classList.remove('hidden');
@@ -1132,6 +1167,7 @@
                                 : (isPickup
                                     ? 'มารับสินค้าเองที่ยาตีมทีวีได้เลยค่ะ แอดมินจะติดต่อยืนยันและนัดเวลารับของนะคะ'
                                     : 'แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ');
+                            state.nw.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
                             document.getElementById('nw-order-section').classList.add('hidden');
                             document.getElementById('nw-success-order-id').innerText = 'ออเดอร์: ' + res.orderId;
                             document.getElementById('nw-success-message').innerText = msg;
@@ -1174,6 +1210,8 @@
                 priceBlock.innerHTML = renderPriceBlock(type, item, priceColor);
             }
 
+            if (s.cart[itemId] === 0) delete s.cart[itemId]; // ไม่เก็บรายการจำนวน 0 ให้ localStorage รก
+            saveCarts();
             calculateTotal(type);
         }
 
