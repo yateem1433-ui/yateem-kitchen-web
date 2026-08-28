@@ -30,6 +30,7 @@
         <div id="no-orders" class="hidden text-center p-10 text-gray-500">
             <p class="text-5xl mb-3">🗒️</p>
             <p>ยังไม่มีประวัติการสั่งซื้อของคุณค่ะ</p>
+            <p class="text-[10px] text-gray-400 mt-4 break-all px-4">รหัสผู้ใช้ของคุณ (สำหรับแจ้งแอดมิน): <span id="debug-userid" class="font-mono"></span></p>
         </div>
 
         <div id="status-container" class="hidden p-4">
@@ -311,6 +312,7 @@
             document.getElementById('last-updated').innerText = 'อัพเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             if (res.orders.length === 0) {
+                document.getElementById('debug-userid').innerText = currentUserId || '(ไม่พบ)';
                 document.getElementById('no-orders').classList.remove('hidden');
                 document.getElementById('status-container').classList.add('hidden');
                 return;
