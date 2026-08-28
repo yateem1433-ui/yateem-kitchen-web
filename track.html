@@ -27,9 +27,15 @@
             <a id="open-in-line-link" href="#" class="inline-block bg-green-600 text-white font-bold py-2 px-6 rounded-lg">เปิดใน LINE</a>
         </div>
 
-        <div id="no-orders" class="hidden text-center p-10 text-gray-500">
+        <div id="no-orders" class="hidden text-center p-6 text-gray-500">
             <p class="text-5xl mb-3">🗒️</p>
-            <p>ยังไม่มีประวัติการสั่งซื้อของคุณค่ะ</p>
+            <p class="mb-5">ยังไม่มีประวัติการสั่งซื้อของคุณค่ะ</p>
+            <div class="max-w-xs mx-auto bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                <p class="text-sm text-gray-700 font-bold mb-1">เคยสั่งแล้วแต่ไม่เห็นประวัติ?</p>
+                <p class="text-xs text-gray-500 mb-3">กรอกเบอร์โทรที่ใช้ตอนสั่ง เพื่อดึงประวัติออเดอร์เข้าบัญชี LINE นี้ค่ะ</p>
+                <input type="tel" id="claim-phone" inputmode="numeric" placeholder="เบอร์โทรที่ใช้สั่ง เช่น 0825705207" class="w-full p-2 border rounded text-sm mb-2">
+                <button onclick="claimByPhone()" id="claim-btn" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-blue-700">🔎 ดึงประวัติออเดอร์ด้วยเบอร์โทร</button>
+            </div>
             <p class="text-[10px] text-gray-400 mt-4 break-all px-4">รหัสผู้ใช้ของคุณ (สำหรับแจ้งแอดมิน): <span id="debug-userid" class="font-mono"></span></p>
         </div>
 
@@ -262,6 +268,28 @@
                 .catch((err) => {
                     if (isFirstLoad) showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message);
                     // โพลรอบถัดไปพลาด ไม่ต้องรบกวนลูกค้าด้วย error เต็มจอ รอรอบถัดไปแทน
+                });
+        }
+
+        // ลูกค้ากรอกเบอร์เพื่อดึงประวัติออเดอร์เก่า (เคสเปลี่ยน LINE/LIFF แล้ว userId เปลี่ยน) - ผูกเข้า userId ปัจจุบันฝั่ง server
+        function claimByPhone() {
+            const phone = document.getElementById('claim-phone').value.trim();
+            if (!phone) { alert('กรุณากรอกเบอร์โทรที่ใช้ตอนสั่งก่อนค่ะ'); return; }
+            const btn = document.getElementById('claim-btn');
+            btn.disabled = true;
+            btn.innerText = 'กำลังดึงประวัติ...';
+            callApi('claimOrdersByPhone', { userId: currentUserId, phone: phone })
+                .then((res) => {
+                    btn.disabled = false;
+                    btn.innerText = '🔎 ดึงประวัติออเดอร์ด้วยเบอร์โทร';
+                    if (!res || res.success === false) { alert('ดึงประวัติไม่สำเร็จ: ' + ((res && res.message) || 'กรุณาลองใหม่')); return; }
+                    if (!res.linked) { alert('ไม่พบออเดอร์ของเบอร์นี้ค่ะ กรุณาตรวจว่าเบอร์ตรงกับที่กรอกตอนสั่งไหม'); return; }
+                    refreshOrders(true); // ดึงใหม่ - ตอนนี้ออเดอร์ผูกกับบัญชีนี้แล้ว จะโชว์เลย
+                })
+                .catch((err) => {
+                    btn.disabled = false;
+                    btn.innerText = '🔎 ดึงประวัติออเดอร์ด้วยเบอร์โทร';
+                    alert('ดึงประวัติไม่สำเร็จ: ' + err.message);
                 });
         }
 
