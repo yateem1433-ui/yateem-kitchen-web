@@ -1,0 +1,16 @@
+{
+  "name": "Yateem Market",
+  "short_name": "Yateem",
+  "description": "สั่งอาหารฮาลาล & สินค้าแห้ง Yateem Market",
+  "lang": "th",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0E2036",
+  "icons": [
+    { "src": "icon.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
+    { "src": "icon.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" }
+  ]
+}
