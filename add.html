@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เพิ่ม Yateem ลงหน้าจอ</title>
+    <meta name="theme-color" content="#0E2036">
+    <link rel="apple-touch-icon" href="icon.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- QR render ฝั่ง client ล้วน ไม่ส่ง URL ไปเซิร์ฟเวอร์ QR ภายนอก -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root{ --navy:#0E2036; --deep:#093862; --gold:#EAB934; --bg:#FAFAFA; --card:#FFFFFF; --line:#ECECEC; --muted:#6B7280; }
+        *{ box-sizing:border-box; }
+        body{ margin:0; font-family:'Kanit',system-ui,sans-serif; background:var(--bg); color:var(--navy);
+              -webkit-font-smoothing:antialiased; line-height:1.55; }
+        .wrap{ max-width:440px; margin:0 auto; padding:20px 16px 40px; }
+        .brand{ display:flex; align-items:center; gap:12px; justify-content:center; margin-bottom:18px; }
+        .brand img{ width:52px; height:52px; border-radius:14px; box-shadow:0 4px 14px rgba(14,32,54,.18); }
+        .brand .name{ font-weight:700; font-size:20px; letter-spacing:.3px; }
+        .brand .name span{ color:var(--gold); }
+        .card{ background:var(--card); border:1px solid var(--line); border-radius:20px; padding:22px;
+               box-shadow:0 8px 26px rgba(14,32,54,.07); }
+        h1{ font-size:20px; font-weight:700; margin:0 0 4px; text-align:center; }
+        .sub{ text-align:center; color:var(--muted); font-size:13.5px; margin:0 0 18px; }
+        .qrbox{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:18px 0 6px; }
+        #qrcode{ padding:12px; background:#fff; border:1px solid var(--line); border-radius:16px; }
+        #qrcode img, #qrcode canvas{ display:block; }
+        .qrcap{ font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+        .btn{ display:block; width:100%; text-align:center; text-decoration:none; border:none; cursor:pointer;
+              font-family:inherit; font-weight:600; font-size:16px; padding:15px 18px; border-radius:14px;
+              background:var(--navy); color:#fff; margin-top:16px; box-shadow:0 6px 16px rgba(14,32,54,.22); }
+        .btn.gold{ background:linear-gradient(180deg,var(--gold),#d9a726); color:var(--navy); }
+        .divider{ display:flex; align-items:center; gap:12px; margin:22px 2px 6px; color:var(--muted); font-size:12px; }
+        .divider::before,.divider::after{ content:''; flex:1; height:1px; background:var(--line); }
+        .warn{ display:none; background:#FFF7E6; border:1px solid #F3D384; color:#7A5A00; border-radius:14px;
+               padding:13px 14px; font-size:13.5px; margin-bottom:16px; }
+        .warn b{ color:#8a4b00; }
+        .steps h2{ font-size:15px; font-weight:600; margin:20px 0 8px; display:flex; align-items:center; gap:8px; }
+        ol{ margin:0; padding-left:0; list-style:none; counter-reset:s; }
+        ol li{ counter-increment:s; position:relative; padding:8px 0 8px 40px; font-size:14px; border-bottom:1px dashed var(--line); }
+        ol li:last-child{ border-bottom:none; }
+        ol li::before{ content:counter(s); position:absolute; left:0; top:7px; width:26px; height:26px; border-radius:50%;
+              background:var(--navy); color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center; }
+        .platsel{ display:flex; gap:8px; margin:8px 0 4px; }
+        .platsel button{ flex:1; font-family:inherit; font-weight:600; font-size:14px; padding:10px; border-radius:12px;
+              border:1.5px solid var(--line); background:#fff; color:var(--navy); cursor:pointer; }
+        .platsel button.on{ border-color:var(--navy); background:var(--navy); color:#fff; }
+        .foot{ text-align:center; color:var(--muted); font-size:12px; margin-top:22px; }
+        kbd{ background:#EEF1F5; border:1px solid #DBE0E7; border-radius:6px; padding:1px 6px; font-family:inherit; font-size:13px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="brand">
+            <img src="icon.jpg" alt="Yateem Market">
+            <div class="name">Yateem <span>Market</span></div>
+        </div>
+
+        <div class="card">
+            <h1>📲 เพิ่ม Yateem ลงหน้าจอมือถือ</h1>
+            <p class="sub">ติดตั้งเหมือนแอป กดสั่งอาหาร & สินค้าแห้งได้ในแตะเดียว</p>
+
+            <div id="line-warn" class="warn">
+                📌 ตอนนี้คุณเปิดในแอป <b>LINE</b> อยู่ค่ะ — ให้แตะปุ่ม <kbd>⋮</kbd> มุมขวาบน
+                แล้วเลือก <b>"เปิดในเบราว์เซอร์"</b> ก่อน จึงจะเพิ่มไอคอนลงหน้าจอได้นะคะ
+            </div>
+
+            <div class="qrbox">
+                <div id="qrcode"></div>
+                <div class="qrcap">📷 สแกนด้วยกล้องมือถือเพื่อเปิดหน้าร้าน</div>
+            </div>
+
+            <a class="btn gold" href="./" id="open-shop">🛍️ เปิดหน้าร้าน Yateem เลย</a>
+
+            <div class="divider">แล้วเพิ่มลงหน้าจอตามนี้</div>
+
+            <div class="platsel">
+                <button id="tab-ios" class="on" onclick="showPlat('ios')">🍎 iPhone</button>
+                <button id="tab-and" onclick="showPlat('and')">🤖 Android</button>
+            </div>
+
+            <div class="steps" id="steps-ios">
+                <h2>🍎 iPhone (Safari)</h2>
+                <ol>
+                    <li>เปิดลิงก์นี้ใน <b>Safari</b></li>
+                    <li>แตะปุ่ม <b>แชร์</b> <kbd>▢↑</kbd> ตรงกลางด้านล่าง</li>
+                    <li>เลื่อนหา <b>"เพิ่มไปยังหน้าจอโฮม"</b> แล้วแตะ</li>
+                    <li>แตะ <b>"เพิ่ม"</b> — ได้ไอคอน Yateem บนหน้าจอ ✅</li>
+                </ol>
+            </div>
+
+            <div class="steps" id="steps-and" style="display:none;">
+                <h2>🤖 Android (Chrome)</h2>
+                <ol>
+                    <li>เปิดลิงก์นี้ใน <b>Chrome</b></li>
+                    <li>แตะเมนู <kbd>⋮</kbd> มุมขวาบน</li>
+                    <li>เลือก <b>"เพิ่มลงในหน้าจอหลัก"</b> หรือ <b>"ติดตั้งแอป"</b></li>
+                    <li>แตะ <b>"เพิ่ม"</b> — ได้ไอคอน Yateem บนหน้าจอ ✅</li>
+                </ol>
+            </div>
+        </div>
+
+        <p class="foot">Yateem Market · อาหารฮาลาล & สินค้าแห้ง ส่งทั่วไทย</p>
+    </div>
+
+    <script>
+        // URL หน้าร้าน (start_url ของ PWA) — path สัมพัทธ์ ./ เผื่อ subpath ของ GitHub Pages
+        var SHOP_URL = new URL('./', location.href).href;
+        document.getElementById('open-shop').href = SHOP_URL;
+
+        // render QR ฝั่ง client (ไม่ส่ง URL ออกไปที่ไหน)
+        try {
+            new QRCode(document.getElementById('qrcode'), {
+                text: SHOP_URL, width: 216, height: 216,
+                colorDark: '#0E2036', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } catch (e) {
+            document.getElementById('qrcode').innerHTML =
+                '<div style="padding:24px;color:#6B7280;font-size:13px;text-align:center">โหลด QR ไม่ได้<br>ใช้ปุ่มเปิดหน้าร้านด้านล่างได้เลยค่ะ</div>';
+        }
+
+        // ถ้าเปิดในแอป LINE (in-app webview) เพิ่มลงหน้าจอไม่ได้ ต้องเปิดเบราว์เซอร์ก่อน
+        if (/Line/i.test(navigator.userAgent)) {
+            document.getElementById('line-warn').style.display = 'block';
+        }
+
+        // เลือกแพลตฟอร์ม + เดาให้อัตโนมัติจาก userAgent
+        function showPlat(p) {
+            var ios = p === 'ios';
+            document.getElementById('steps-ios').style.display = ios ? 'block' : 'none';
+            document.getElementById('steps-and').style.display = ios ? 'none' : 'block';
+            document.getElementById('tab-ios').className = ios ? 'on' : '';
+            document.getElementById('tab-and').className = ios ? '' : 'on';
+        }
+        if (/android/i.test(navigator.userAgent)) showPlat('and');
+    </script>
+</body>
+</html>
