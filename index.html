@@ -433,8 +433,11 @@
         // (ต้องรอทั้งอัปโหลดสลิปเข้า Drive และรอ LockService คิวกับคำขออื่น - 15 วิเดิมตัดคำขอที่กำลังจะสำเร็จทิ้ง)
         async function callApi(action, params) {
             const isRead = RETRYABLE_ACTIONS.has(action);
-            const canRetry = isRead || IDEMPOTENT_WRITE_ACTIONS.has(action);
-            const maxAttempts = canRetry ? 3 : 1;
+            const isIdemWrite = IDEMPOTENT_WRITE_ACTIONS.has(action);
+            const canRetry = isRead || isIdemWrite;
+            // เขียนที่ idempotent (submitOrder/submitNationwideOrder) ลองได้ถึง 5 ครั้ง - ช่วงพีคสั้นๆ (flash crowd)
+            // คิว LockService คลายภายในไม่กี่วินาที ให้โอกาสผ่านมากขึ้นก่อนโชว์ error (RequestId กันออเดอร์ซ้ำอยู่แล้ว)
+            const maxAttempts = canRetry ? (isIdemWrite ? 5 : 3) : 1;
             const timeoutMs = isRead ? 45000 : 120000; // เขียนข้อมูลใช้ 120 วิเสมอ แม้จะ retry ได้
             let lastErr;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -447,8 +450,10 @@
                     const worthRetrying = isNetworkIssue || err.isBusy === true;
                     if (!worthRetrying || attempt === maxAttempts) throw lastErr;
                     // คิวเต็มต้องรอนานกว่าเน็ตกระตุก เพราะต้องรอคำขอของคนอื่นเขียนเสร็จก่อน
-                    const backoffMs = (err.isBusy ? 1500 : 500) * attempt;
-                    await new Promise(resolve => setTimeout(resolve, backoffMs)); // backoff เพิ่มขึ้นทีละรอบ
+                    // ใส่ jitter สุ่ม ±25% กันลูกค้าหลายคนที่เจอ busy พร้อมกัน retry พร้อมกันเป๊ะ (thundering herd)
+                    const base = (err.isBusy ? 1500 : 500) * attempt;
+                    const backoffMs = Math.round(base * (0.75 + Math.random() * 0.5));
+                    await new Promise(resolve => setTimeout(resolve, backoffMs)); // backoff เพิ่มขึ้นทีละรอบ + jitter
                 }
             }
             throw lastErr;
@@ -1123,7 +1128,11 @@
                         }
                     })
                     .catch((err) => {
-                        alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + err.message);
+                        // ระบบไม่ว่าง (คิว LockService เต็มช่วงพีค) - ต่างจาก error จริง: ออเดอร์ยังไม่ถูกสร้าง กดใหม่ได้ปลอดภัย
+                        const msg = err.isBusy
+                            ? 'ตอนนี้มีลูกค้าสั่งพร้อมกันเยอะมากค่ะ 🙏 ออเดอร์ยังไม่ถูกตัด กรุณารอสักครู่แล้วกดส่งอีกครั้งนะคะ'
+                            : ('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + err.message);
+                        alert(msg);
                         btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
                         btnSubmit.disabled = false;
                     });
@@ -1205,7 +1214,11 @@
                         }
                     })
                     .catch((err) => {
-                        alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + err.message);
+                        // ระบบไม่ว่าง (คิว LockService เต็มช่วงพีค) - ต่างจาก error จริง: ออเดอร์ยังไม่ถูกสร้าง กดใหม่ได้ปลอดภัย
+                        const msg = err.isBusy
+                            ? 'ตอนนี้มีลูกค้าสั่งพร้อมกันเยอะมากค่ะ 🙏 ออเดอร์ยังไม่ถูกตัด กรุณารอสักครู่แล้วกดส่งอีกครั้งนะคะ'
+                            : ('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + err.message);
+                        alert(msg);
                         btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
                         btnSubmit.disabled = false;
                     });
