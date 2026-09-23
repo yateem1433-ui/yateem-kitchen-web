@@ -1280,46 +1280,75 @@
             }
             if (checkoutCancelled[type]) return;
 
+            // เปิดฟอร์มทันที ไม่รอหลังบ้าน - ข้อมูลเดิมเป็นแค่ตัวช่วยกรอก
+            // (เดิมรอ Apps Script ตอบก่อนถึงเปิดฟอร์ม ปุ่มค้าง "กำลังตรวจสอบ..." 3-10 วิ ทุกครั้ง)
+            resetCheckoutButton(type);
+            showOrderForm(type);
+            prefillOrderForm(type, readLocalProfile()); // ลูกค้าที่เคยสั่งจากเครื่องนี้เห็นข้อมูลขึ้นทันที
+            if (type === 'food') checkFoodAddressArea();
+
+            // ดึงข้อมูลเดิมจากหลังบ้านตามมาเบื้องหลัง - เติมเฉพาะช่องที่ยังว่าง ไม่ทับสิ่งที่ลูกค้าพิมพ์ไปแล้ว
+            // โหลดไม่สำเร็จก็ไม่เป็นไร ลูกค้ากรอกเองได้ตามปกติ
             if (type === 'food') {
-                // เดี๋ยวนี้ไม่บังคับเช็กอินสะสมแต้มบนทีวีก่อนสั่งอาหารแล้ว - verifyBkkUser แค่ช่วยเติมชื่อ/เบอร์/ที่อยู่ให้อัตโนมัติถ้ามีข้อมูลเดิม
+                // ไม่บังคับเช็กอินสะสมแต้มบนทีวีก่อนสั่งอาหารแล้ว - verifyBkkUser แค่ช่วยเติมชื่อ/เบอร์/ที่อยู่ถ้ามีข้อมูลเดิม
                 // พื้นที่จัดส่งจริงเช็กจากคำในที่อยู่ตอนกรอกฟอร์ม (checkFoodAddressArea) + เช็กซ้ำฝั่งเซิร์ฟเวอร์ตอนกดส่งออเดอร์
                 callApi('verifyBkkUser', idp)
                     .then((result) => {
-                        if (checkoutCancelled.food) return;
                         bkkVerification = result;
-                        resetCheckoutButton('food');
-                        document.getElementById('food-fullname').value = result.fullname || '';
-                        document.getElementById('food-phone').value = result.phone || '';
-                        document.getElementById('food-address').value = result.address || '';
-                        showOrderForm('food');
-                        checkFoodAddressArea();
+                        const p = { fullname: result.fullname, phone: result.phone, address: result.address };
+                        prefillOrderForm('food', p);
+                        saveLocalProfile(p);
                     })
-                    .catch(() => {
-                        // โหลดข้อมูลเดิมไม่สำเร็จ ไม่ต้องบล็อก ให้กรอกเองได้ตามปกติ
-                        if (checkoutCancelled.food) return;
-                        resetCheckoutButton('food');
-                        showOrderForm('food');
-                        checkFoodAddressArea();
-                    });
+                    .catch(() => {});
             } else {
                 callApi('getCustomerProfile', idp)
                     .then((customerProfile) => {
-                        if (checkoutCancelled.nw) return;
-                        if (customerProfile) {
-                            document.getElementById('nw-fullname').value = customerProfile.name || '';
-                            document.getElementById('nw-phone').value = customerProfile.phone || '';
-                            document.getElementById('nw-address').value = customerProfile.address || '';
-                        }
-                        resetCheckoutButton('nw');
-                        showOrderForm('nw');
+                        if (!customerProfile) return;
+                        const p = { fullname: customerProfile.name, phone: customerProfile.phone, address: customerProfile.address };
+                        prefillOrderForm('nw', p);
+                        saveLocalProfile(p);
                     })
-                    .catch(() => {
-                        // โหลดข้อมูลลูกค้าเก่าไม่สำเร็จ ไม่ต้องบล็อก ให้กรอกเองได้ตามปกติ
-                        if (checkoutCancelled.nw) return;
-                        resetCheckoutButton('nw');
-                        showOrderForm('nw');
-                    });
+                    .catch(() => {});
             }
+        }
+
+        // ชื่อ/เบอร์/ที่อยู่ที่ลูกค้าเคยใช้ เก็บในเครื่องแยกตามบัญชี (LINE userId / 'fb:' + uid ของ Google/Facebook)
+        const PROFILE_STORAGE_PREFIX = 'yateemProfile_';
+
+        function currentProfileUid() {
+            return webUser ? 'fb:' + webUser.uid : ((profile && profile.userId) || '');
+        }
+
+        function readLocalProfile() {
+            const uid = currentProfileUid();
+            if (!uid) return null;
+            try { return JSON.parse(localStorage.getItem(PROFILE_STORAGE_PREFIX + uid) || 'null'); } catch (e) { return null; }
+        }
+
+        // รวมกับของเดิม - ช่องไหนค่าใหม่ว่างให้คงค่าเดิมไว้
+        function saveLocalProfile(p) {
+            const uid = currentProfileUid();
+            if (!uid || !p) return;
+            const old = readLocalProfile() || {};
+            const merged = {
+                fullname: String(p.fullname || old.fullname || ''),
+                phone: String(p.phone || old.phone || ''),
+                address: String(p.address || old.address || '')
+            };
+            try { localStorage.setItem(PROFILE_STORAGE_PREFIX + uid, JSON.stringify(merged)); } catch (e) { /* เต็ม/โหมดส่วนตัว - ข้ามได้ */ }
+        }
+
+        function fillIfEmpty(id, value) {
+            const el = document.getElementById(id);
+            if (el && !el.value.trim() && value) el.value = String(value);
+        }
+
+        function prefillOrderForm(type, p) {
+            if (!p) return;
+            fillIfEmpty(type + '-fullname', p.fullname);
+            fillIfEmpty(type + '-phone', p.phone);
+            fillIfEmpty(type + '-address', p.address);
+            if (type === 'food') checkFoodAddressArea(); // เปิด/ปิดปุ่มส่งตามที่อยู่ที่เพิ่งเติม
         }
 
         function resetCheckoutButton(type) {
@@ -1410,6 +1439,7 @@
                     .then((res) => {
                         if (res.success) {
                             state.food.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
+                            saveLocalProfile({ fullname: fullname, phone: phone, address: isPickup ? '' : address }); // ครั้งหน้าเติมให้ทันที
                             document.getElementById('food-order-section').classList.add('hidden');
                             document.getElementById('food-rider-order-id').innerText = 'ออเดอร์: ' + res.orderId;
                             document.getElementById('food-rider-section').classList.remove('hidden');
@@ -1496,6 +1526,7 @@
                                     ? 'มารับสินค้าเองที่ยาตีมทีวีได้เลยค่ะ แอดมินจะติดต่อยืนยันและนัดเวลารับของนะคะ'
                                     : 'แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ');
                             state.nw.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
+                            saveLocalProfile({ fullname: fullname, phone: phone, address: isPickup ? '' : address }); // ครั้งหน้าเติมให้ทันที
                             document.getElementById('nw-order-section').classList.add('hidden');
                             document.getElementById('nw-success-order-id').innerText = 'ออเดอร์: ' + res.orderId;
                             document.getElementById('nw-success-message').innerText = msg;
