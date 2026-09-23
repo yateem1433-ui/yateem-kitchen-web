@@ -218,6 +218,16 @@
         let webUser = null;
         let liffReady = false;
 
+        // แปลง error ของ Firebase เป็นข้อความไทย - คืน '' ถ้าไม่ต้องแจ้ง (ผู้ใช้ปิดหน้าต่างเอง)
+        function loginErrorText(err) {
+            const code = (err && err.code) || '';
+            if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
+            if (code === 'auth/operation-not-allowed' || code === 'auth/unauthorized-domain') return 'ช่องทางนี้ยังไม่เปิดใช้งาน กรุณาเข้าสู่ระบบด้วยช่องทางอื่น (เช่น LINE) ไปก่อนนะคะ';
+            if (code === 'auth/account-exists-with-different-credential') return 'อีเมลนี้เคยเข้าสู่ระบบด้วยอีกช่องทางแล้ว กรุณาใช้ช่องทางเดิมค่ะ';
+            if (code === 'auth/network-request-failed') return 'เชื่อมต่ออินเทอร์เน็ตไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ';
+            return 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ' + (code ? ' (' + code + ')' : '');
+        }
+
         function isSocialUser(u) {
             return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com'));
         }
@@ -228,7 +238,7 @@
                     if (typeof firebase === 'undefined') { resolve(null); return; }
                     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
                     const auth = firebase.auth();
-                    auth.getRedirectResult().catch(() => {});
+                    auth.getRedirectResult().catch((err) => { const m = loginErrorText(err); if (m) alert(m); });
                     let first = true;
                     auth.onAuthStateChanged((u) => {
                         webUser = isSocialUser(u) ? u : null;
@@ -260,9 +270,8 @@
                     firebase.auth().signInWithRedirect(provider);
                     return;
                 }
-                if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
-                if (code === 'auth/account-exists-with-different-credential') { alert('อีเมลนี้เคยเข้าสู่ระบบด้วยอีกช่องทางแล้ว กรุณาใช้ช่องทางเดิมค่ะ'); return; }
-                alert('เข้าสู่ระบบไม่สำเร็จ: ' + (err && err.message ? err.message : code));
+                const msg = loginErrorText(err);
+                if (msg) alert(msg);
             }
         }
 

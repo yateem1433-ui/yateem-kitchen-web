@@ -999,8 +999,9 @@
             const code = (err && err.code) || '';
             if (code === 'auth/account-exists-with-different-credential') return 'อีเมลนี้เคยเข้าสู่ระบบด้วยอีกช่องทางแล้ว กรุณาใช้ช่องทางเดิมค่ะ';
             if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
-            if (code === 'auth/unauthorized-domain' || code === 'auth/operation-not-allowed') return 'ระบบล็อกอินนี้ยังไม่เปิดใช้งาน กรุณาเข้าสู่ระบบด้วย LINE ไปก่อนนะคะ';
-            return 'เข้าสู่ระบบไม่สำเร็จ: ' + (err && err.message ? err.message : code);
+            if (code === 'auth/unauthorized-domain' || code === 'auth/operation-not-allowed') return 'ช่องทางนี้ยังไม่เปิดใช้งาน กรุณาเข้าสู่ระบบด้วยช่องทางอื่น (เช่น LINE) ไปก่อนนะคะ';
+            if (code === 'auth/network-request-failed') return 'เชื่อมต่ออินเทอร์เน็ตไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ';
+            return 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ' + (code ? ' (' + code + ')' : '');
         }
 
         // ข้อมูลตัวตนที่แนบไปกับทุกคำขอที่เกี่ยวกับลูกค้า: เว็บ = idToken (หลังบ้านตรวจเอง), LINE = userId แบบเดิม
