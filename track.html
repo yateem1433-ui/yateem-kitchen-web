@@ -14,6 +14,9 @@
     <meta name="apple-mobile-web-app-title" content="Yateem">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <!-- Firebase Auth: ติดตามออเดอร์ด้วยบัญชี Google/Facebook (โปรเจกต์เดียวกับ Yateem TV) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 </head>
 <body class="bg-gray-100 font-sans p-4">
 
@@ -29,11 +32,16 @@
 
         <div id="error-msg" class="hidden text-center p-10 text-red-500 font-bold"></div>
 
-        <div id="not-in-client" class="hidden text-center p-10">
-            <p class="text-5xl mb-3">📱</p>
-            <p class="text-gray-700 font-bold mb-4">กรุณาเปิดหน้านี้ผ่านแอป LINE เพื่อดูสถานะออเดอร์ค่ะ</p>
-            <a id="open-in-line-link" href="#" class="inline-block bg-green-600 text-white font-bold py-2 px-6 rounded-lg">เปิดใน LINE</a>
+        <div id="not-in-client" class="hidden text-center p-8">
+            <p class="text-5xl mb-3">👤</p>
+            <p class="text-gray-700 font-bold mb-1">เข้าสู่ระบบเพื่อดูออเดอร์ของคุณ</p>
+            <p class="text-sm text-gray-500 mb-5">ใช้บัญชีเดียวกับตอนสั่งซื้อนะคะ</p>
+            <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
+            <button onclick="webLogin('facebook')" class="block w-full text-white font-bold py-3 rounded-lg mb-2" style="background:#1877F2">f&nbsp; เข้าสู่ระบบด้วย Facebook</button>
+            <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2">💬 เข้าสู่ระบบด้วย LINE</button>
+            <a id="open-in-line-link" href="#" class="inline-block text-sm text-green-700 underline mt-1">หรือเปิดในแอป LINE</a>
         </div>
+        <p id="web-account" class="hidden text-center text-xs text-gray-500 pt-3"></p>
 
         <div id="no-orders" class="hidden text-center p-6 text-gray-500">
             <p class="text-5xl mb-3">🗒️</p>
@@ -74,7 +82,7 @@
             </div>
 
             <a href="index.html" class="block w-full text-center bg-gray-100 text-gray-700 font-bold py-3 rounded-lg mt-4 mb-2 border border-gray-300">← กลับหน้าหลัก</a>
-            <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+            <button onclick="closePage()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
         </div>
     </div>
 
@@ -198,21 +206,122 @@
         let currentOrderTab = 'active';
         const ordersById = {}; // orderId -> ข้อมูลออเดอร์ล่าสุด (ใช้ตอนเปิดโมดัลเคลม/รีวิว)
 
+        // ---------------- ล็อกอินเว็บ: Google / Facebook (Firebase Auth) ----------------
+        // โปรเจกต์ Firebase เดียวกับ Yateem TV + โดเมนเดียวกัน = ล็อกอินที่ไหนก็ใช้ได้ทั้งหมด
+        // หลังบ้านตรวจ idToken กับ Google ทุกครั้ง (resolveCaller_ ใน Code.gs) - ไม่เชื่อ userId จากหน้าเว็บ
+        const FIREBASE_CONFIG = {
+            apiKey: 'AIzaSyAdLSsK9huWHQH5Hgy_Nd_xdUOgk65YYPw',
+            authDomain: 'yateem-tv.firebaseapp.com',
+            projectId: 'yateem-tv',
+            appId: '1:1016647498747:web:198fde90519c5cd29ee95e'
+        };
+        let webUser = null;
+        let liffReady = false;
+
+        function isSocialUser(u) {
+            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com'));
+        }
+
+        function initWebAuth() {
+            return new Promise((resolve) => {
+                try {
+                    if (typeof firebase === 'undefined') { resolve(null); return; }
+                    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+                    const auth = firebase.auth();
+                    auth.getRedirectResult().catch(() => {});
+                    let first = true;
+                    auth.onAuthStateChanged((u) => {
+                        webUser = isSocialUser(u) ? u : null;
+                        if (first) { first = false; resolve(webUser); }
+                    });
+                    setTimeout(() => { if (first) { first = false; resolve(null); } }, 6000);
+                } catch (err) {
+                    resolve(null);
+                }
+            });
+        }
+
+        // ข้อมูลตัวตนที่แนบไปกับคำขอ: เว็บ = idToken, LINE = userId แบบเดิม
+        async function identityParams() {
+            if (webUser) return { idToken: await webUser.getIdToken() };
+            return { userId: currentUserId };
+        }
+
+        async function webLogin(providerName) {
+            if (typeof firebase === 'undefined') { alert('โหลดระบบล็อกอินไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ'); return; }
+            const provider = providerName === 'facebook' ? new firebase.auth.FacebookAuthProvider() : new firebase.auth.GoogleAuthProvider();
+            try {
+                await firebase.auth().signInWithPopup(provider);
+                location.reload();
+            } catch (err) {
+                const code = (err && err.code) || '';
+                if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                    if (window.self !== window.top) { window.top.location.href = location.href; return; }
+                    firebase.auth().signInWithRedirect(provider);
+                    return;
+                }
+                if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+                if (code === 'auth/account-exists-with-different-credential') { alert('อีเมลนี้เคยเข้าสู่ระบบด้วยอีกช่องทางแล้ว กรุณาใช้ช่องทางเดิมค่ะ'); return; }
+                alert('เข้าสู่ระบบไม่สำเร็จ: ' + (err && err.message ? err.message : code));
+            }
+        }
+
+        function lineLogin() {
+            if (window.self !== window.top) { window.top.location.href = location.href; return; }
+            if (liffReady) { liff.login({ redirectUri: location.href.split('#')[0] }); return; }
+            location.href = 'https://liff.line.me/' + MY_LIFF_ID;
+        }
+
+        function webLogout() {
+            try { firebase.auth().signOut().then(() => location.reload()); } catch (e) { location.reload(); }
+        }
+
+        function closePage() {
+            try { if (liffReady && liff.isInClient()) { liff.closeWindow(); return; } } catch (e) {}
+            location.href = 'index.html';
+        }
+
+        function showLoginChoices() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('not-in-client').classList.remove('hidden');
+        }
+
         async function main() {
             document.getElementById('open-in-line-link').href = 'https://liff.line.me/' + MY_LIFF_ID;
 
+            // 1) ล็อกอิน Google/Facebook อยู่แล้ว (จากหน้าร้านหรือหน้า Yateem TV)
+            await initWebAuth();
+            if (webUser) {
+                currentUserId = 'fb:' + webUser.uid;   // ตรงกับ userId ที่หลังบ้านบันทึก (ไว้แจ้งแอดมิน)
+                const acc = document.getElementById('web-account');
+                const provider = (webUser.providerData || []).some(p => p.providerId === 'facebook.com') ? 'Facebook' : 'Google';
+                acc.textContent = '';
+                acc.append('เข้าสู่ระบบด้วย ' + provider + ': ' + (webUser.displayName || webUser.email || '') + ' · ');
+                const out = document.createElement('a');
+                out.href = 'javascript:void(0)'; out.className = 'underline'; out.textContent = 'ออกจากระบบ';
+                out.onclick = webLogout;
+                acc.appendChild(out);
+                acc.classList.remove('hidden');
+                refreshOrders(true);
+                startPolling();
+                setupVisibilityPause();
+                return;
+            }
+
+            // 2) LINE
             try {
                 await withTimeout(liff.init({ liffId: MY_LIFF_ID }), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป');
+                liffReady = true;
             } catch (err) {
-                showError('เชื่อมต่อ LINE ไม่สำเร็จ: ' + err.message);
+                // เชื่อมต่อ LINE ไม่ได้ (เช่นเปิดนอกแอป/ถูกฝังในหน้าอื่น) - ยังล็อกอินด้วย Google/Facebook ได้
+                showLoginChoices();
                 return;
             }
 
             if (!liff.isLoggedIn()) {
                 if (!liff.isInClient()) {
-                    // เปิดนอกแอป LINE - หน้าเว็บของ Apps Script ไม่รองรับ login ผ่าน redirect ในเบราว์เซอร์ปกติ
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('not-in-client').classList.remove('hidden');
+                    // เปิดนอกแอป LINE - ให้เลือกล็อกอิน Google / Facebook / LINE
+                    showLoginChoices();
                     return;
                 }
                 liff.login();
@@ -271,7 +380,8 @@
 
         function refreshOrders(isFirstLoad) {
             // คืน promise ไว้ให้ผู้เรียก (เช่น confirmReceived) เอาไปต่อ .then() หลังข้อมูลอัปเดตเสร็จได้
-            return callApi('getMyOrders', { userId: currentUserId })
+            return identityParams()
+                .then((idp) => callApi('getMyOrders', idp))
                 .then((res) => renderOrders(res, isFirstLoad))
                 .catch((err) => {
                     if (isFirstLoad) showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message);
@@ -286,7 +396,8 @@
             const btn = document.getElementById('claim-btn');
             btn.disabled = true;
             btn.innerText = 'กำลังดึงประวัติ...';
-            callApi('claimOrdersByPhone', { userId: currentUserId, phone: phone })
+            identityParams()
+                .then((idp) => callApi('claimOrdersByPhone', Object.assign({ phone: phone }, idp)))
                 .then((res) => {
                     btn.disabled = false;
                     btn.innerText = '🔎 ดึงประวัติออเดอร์ด้วยเบอร์โทร';
@@ -586,14 +697,13 @@
                 const imageBase64 = imageFile ? await resizeImageBase64(imageFile, 1280, 0.8) : null;
                 const imageName = imageFile ? `claim_${order.orderId}_${new Date().getTime()}.png` : null;
 
-                const res = await callApi('submitClaim', {
+                const res = await callApi('submitClaim', Object.assign({
                     orderType: order.type,
                     orderId: order.orderId,
-                    userId: currentUserId,
                     description: description,
                     imageBase64: imageBase64,
                     imageName: imageName
-                });
+                }, await identityParams()));
 
                 btn.disabled = false;
                 btn.innerText = 'ส่งเรื่องเคลม';
@@ -664,17 +774,16 @@
                 const photoBase64 = imageFile ? await resizeImageBase64(imageFile, 1280, 0.8) : null;
                 const photoName = imageFile ? `review_${review.orderId}_${new Date().getTime()}.png` : null;
 
-                const res = await callApi('submitReview', {
+                const res = await callApi('submitReview', Object.assign({
                     orderType: review.type,
                     orderId: review.orderId,
-                    userId: currentUserId,
                     menuId: review.menuId,
                     menuName: review.menuName,
                     rating: selectedStars,
                     comment: comment,
                     photoBase64: photoBase64,
                     photoName: photoName
-                });
+                }, await identityParams()));
 
                 btn.disabled = false;
                 btn.innerText = 'ส่งรีวิว';

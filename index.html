@@ -16,7 +16,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <link rel="preconnect" href="https://script.google.com">
+    <link rel="preconnect" href="https://script.googleusercontent.com">
+    <!-- defer: ไม่บล็อกการแสดงผล/การโหลดเมนู (LIFF ใช้ตอนกดสั่งซื้อเท่านั้น) -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
+    <!-- Firebase Auth: ล็อกอิน Google/Facebook (โปรเจกต์เดียวกับ Yateem TV - โดเมนเดียวกัน ล็อกอินครั้งเดียวใช้ได้ทั้งสองเว็บ) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
     <style>
         /* ============================================================
            Yateem UI — Clean White Minimalist + Deep Navy + Gold + ฟอนต์ Kanit
@@ -230,7 +236,7 @@
                 <p id="food-rider-order-id" class="text-sm text-gray-500 mb-4"></p>
                 <p class="text-gray-600 leading-relaxed mb-6">กรุณารอแอดมินจัดเตรียมออเดอร์สักครู่นะคะ 🙏<br>เมื่อพร้อมจัดส่งแล้ว จะมีปุ่มเรียกรถขึ้นในหน้าติดตามออเดอร์ให้เลยค่ะ</p>
                 <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
-                <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+                <button onclick="closePage()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
             </div>
         </div>
 
@@ -348,19 +354,23 @@
                 <p id="nw-success-order-id" class="text-sm text-gray-500 mb-4"></p>
                 <p id="nw-success-message" class="text-gray-600 leading-relaxed mb-6"></p>
                 <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
-                <button onclick="liff.closeWindow()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
+                <button onclick="closePage()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
             </div>
         </div>
 
     </div>
 
+    <!-- เลือกวิธีเข้าสู่ระบบก่อนสั่งซื้อ (นอกแอป LINE) - Google / Facebook / LINE -->
     <div id="open-in-line-notice" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
-            <p class="text-5xl mb-3">📱</p>
-            <h2 class="text-lg font-bold text-gray-800 mb-2">กรุณาเปิดผ่านแอป LINE เพื่อสั่งซื้อ</h2>
-            <p class="text-sm text-gray-600 mb-5">การยืนยันตัวตนก่อนสั่งซื้อต้องเปิดหน้านี้จากในแอป LINE เท่านั้นค่ะ (ดูรายการสินค้าต่อในเบราว์เซอร์นี้ได้ตามปกติ แต่ต้องกดสั่งซื้อผ่านแอป LINE นะคะ)</p>
-            <a id="open-in-line-link" href="#" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">เปิดใน LINE เพื่อสั่งซื้อ</a>
-            <button onclick="document.getElementById('open-in-line-notice').classList.add('hidden')" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
+            <p class="text-5xl mb-3">👤</p>
+            <h2 class="text-lg font-bold text-gray-800 mb-2">เข้าสู่ระบบเพื่อสั่งซื้อ</h2>
+            <p class="text-sm text-gray-600 mb-5">เลือกบัญชีที่สะดวกได้เลยค่ะ ใช้บัญชีเดิมทุกครั้งเพื่อติดตามออเดอร์ได้ครบ</p>
+            <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
+            <button onclick="webLogin('facebook')" class="block w-full text-white font-bold py-3 rounded-lg mb-2" style="background:#1877F2">f&nbsp; เข้าสู่ระบบด้วย Facebook</button>
+            <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">💬 เข้าสู่ระบบด้วย LINE</button>
+            <a id="open-in-line-link" href="#" class="block text-sm text-green-700 underline mb-3">หรือเปิดร้านในแอป LINE</a>
+            <button onclick="closeLoginChooser()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
         </div>
     </div>
 
@@ -381,6 +391,8 @@
         // CONFIG: ลิงก์ Apps Script backend (ตัวเดียวกับที่เคยใช้ /exec ทั้งหมด) - หน้านี้ยิง fetch() ไปหาแทน google.script.run
         const EXEC_URL = 'https://script.google.com/macros/s/AKfycbz0Q2AG7WlKzQaWCNii47VS8DU__Tz4eOAAIiCkCn5VL3uBazq9YiGDtf0wYis_A-nlVw/exec';
         const RESUME_STORAGE_KEY = 'ytk_checkout_state';
+        // รูปสำรองตอนสินค้าไม่มีรูป - ฝังในหน้าเลย (เดิมใช้ via.placeholder.com ซึ่งช้า/ล่มบ่อย ทำให้หน้าโหลดค้าง)
+        const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#F0F0F0"/><text x="48" y="58" font-size="34" text-anchor="middle">🛍️</text></svg>');
 
         // action ที่อ่านข้อมูลอย่างเดียว (ไม่มีผลข้างเคียง) - retry ได้เสมอ และใช้ timeout สั้น (45 วิ)
         const RETRYABLE_ACTIONS = new Set([
@@ -512,7 +524,13 @@
             // เรียก liff.login() ได้ทันทีในจังหวะเดียวกับการคลิก - ถ้ารอ init ตอนกดค่อยเรียก
             // จะเสีย "user activation" ของการคลิกไปตามระหว่างรอ ทำให้เบราว์เซอร์ไม่ยอมให้ redirect
             // ออกจาก iframe ของ Apps Script ไปหน้า login ของ LINE ได้ (ต้นเหตุของ error "won't allow to display")
-            ensureLiffInit().catch(() => { /* เดี๋ยวลอง init ใหม่อีกทีตอนกดเช็กเอาต์ */ });
+            // SDK ของ LIFF/Firebase โหลดแบบ defer - รอ DOMContentLoaded ก่อนค่อย init (ไม่บล็อกการโหลดเมนู)
+            const initSdks = () => {
+                ensureLiffInit().catch(() => { /* เดี๋ยวลอง init ใหม่อีกทีตอนกดเช็กเอาต์ */ });
+                initWebAuth();
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSdks);
+            else initSdks();
 
             switchTab(pendingResume ? pendingResume.type : 'nw');
             loadBootstrap();
@@ -521,38 +539,79 @@
         // รวมโหลดทุกอย่างที่หน้าแรกต้องใช้ (ค่าตั้งค่าอาหาร/ชำระเงิน + เมนู 2 แท็บ) เป็น request เดียว
         // แทนที่จะยิง 4 request แยกกันเหมือนเดิม (2 ใน 4 ต่อคิวกันโดยไม่จำเป็น) - เดิมแต่ละ request คือ
         // การวิ่งไปเปิด Google Sheets 1 รอบ ยิ่งเยอะยิ่งช้าและเสี่ยง "Failed to fetch" ตอน backend คิวแน่น
+        // เมนูที่โหลดสำเร็จล่าสุดเก็บไว้ในเครื่อง - เปิดหน้าครั้งถัดไปโชว์ได้ทันที (ไม่ต้องรอหลังบ้าน)
+        // แล้วค่อยอัปเดตเป็นข้อมูลล่าสุดเบื้องหลัง (stale-while-revalidate) - ราคา/สต็อกจริงหลังบ้านเช็กซ้ำตอนส่งออเดอร์อยู่แล้ว
+        const BOOTSTRAP_STORAGE_KEY = 'yateemBootstrap_v1';
+        const BOOTSTRAP_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
+        let lastBootstrapJson = null;
+
+        function readCachedBootstrap() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(BOOTSTRAP_STORAGE_KEY) || 'null');
+                if (!saved || !saved.data || Date.now() - saved.ts > BOOTSTRAP_MAX_AGE_MS) return null;
+                return saved.data;
+            } catch (e) { return null; }
+        }
+
+        function saveCachedBootstrap(data) {
+            try { localStorage.setItem(BOOTSTRAP_STORAGE_KEY, JSON.stringify({ ts: Date.now(), data: data })); } catch (e) { /* เต็ม/โหมดส่วนตัว - ข้ามได้ */ }
+        }
+
+        // ลูกค้ากำลังกรอกฟอร์มสั่งซื้อของแท็บนี้อยู่หรือไม่ (ถ้าใช่ ห้าม render เมนูทับ)
+        function isCheckoutOpen(type) {
+            return document.getElementById(type + '-menu-section').classList.contains('hidden')
+                && document.getElementById(type + '-loading').classList.contains('hidden');
+        }
+
         function loadBootstrap() {
+            const cached = readCachedBootstrap();
+            if (cached && cached.nwMenu && cached.foodMenu) {
+                lastBootstrapJson = JSON.stringify(cached);
+                applyBootstrap(cached, true);
+            }
             callApi('getBootstrap')
                 .then((data) => {
-                    nwPaymentSettings = data.nwPaymentSettings || { codShippingFee: 50, bankAccountName: '-', bankName: '-', bankAccountNumber: '-' };
-                    applyNwPaymentSettingsToUI(nwPaymentSettings);
-
-                    foodSettings = data.foodSettings || { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'] };
-                    applyFoodSettingsToUI(foodSettings);
-
-                    if (data.nwMenu) {
-                        renderNwMenu(data.nwMenu);
-                    } else {
-                        loadNwMenu();
-                    }
-
-                    if (data.foodMenu) {
-                        updateFoodPreorderNote();
-                        renderFoodMenu(data.foodMenu);
-                    } else {
-                        loadFoodMenu();
-                    }
-
-                    if (!pendingResume) {
-                        const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
-                        if (isFoodOpenHours() || isTestMode) switchTab('food');
-                    }
+                    const json = JSON.stringify(data);
+                    if (data && data.nwMenu && data.foodMenu) saveCachedBootstrap(data);
+                    if (json === lastBootstrapJson) return; // เหมือนที่โชว์อยู่แล้ว ไม่ต้องวาดใหม่
+                    const hadCache = lastBootstrapJson !== null;
+                    lastBootstrapJson = json;
+                    applyBootstrap(data, false, hadCache);
                 })
                 .catch((err) => {
+                    // โชว์เมนูจากเครื่องไปแล้ว - ไม่ต้องทำให้หน้าพัง
+                    if (lastBootstrapJson !== null) return;
                     // ถ้า backend ยังไม่ได้ deploy รุ่นที่มี getBootstrap (ระหว่างช่วง deploy ไม่พร้อมกัน)
                     // หรือ network ล้มเหลว ให้ถอยไปเรียกทีละตัวแบบเดิม หน้าเว็บจะได้ไม่พังกลางทาง
                     loadBootstrapFallback();
                 });
+        }
+
+        function applyBootstrap(data, fromCache, isRefresh) {
+            nwPaymentSettings = data.nwPaymentSettings || { codShippingFee: 50, bankAccountName: '-', bankName: '-', bankAccountNumber: '-' };
+            applyNwPaymentSettingsToUI(nwPaymentSettings);
+
+            foodSettings = data.foodSettings || { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'] };
+            applyFoodSettingsToUI(foodSettings);
+
+            if (data.nwMenu) {
+                if (!(isRefresh && isCheckoutOpen('nw'))) renderNwMenu(data.nwMenu);
+            } else if (!fromCache) {
+                loadNwMenu();
+            }
+
+            if (data.foodMenu) {
+                updateFoodPreorderNote();
+                if (!(isRefresh && isCheckoutOpen('food'))) renderFoodMenu(data.foodMenu);
+            } else if (!fromCache) {
+                loadFoodMenu();
+            }
+
+            // สลับไปแท็บอาหารช่วงเปิดขาย - ทำครั้งแรกครั้งเดียว ไม่สลับแท็บทับตอนอัปเดตเบื้องหลัง
+            if (!pendingResume && !isRefresh) {
+                const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
+                if (isFoodOpenHours() || isTestMode) switchTab('food');
+            }
         }
 
         function loadBootstrapFallback() {
@@ -743,7 +802,7 @@
                     const itemHtml = `
                         <div data-category="${item.category || ''}" class="flex bg-white p-4 rounded-lg shadow items-center gap-4">
                             <div class="relative flex-shrink-0">
-                                <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${item.name}" width="96" height="96" loading="lazy" class="w-24 h-24 rounded-lg object-cover">
+                                <img src="${item.imageUrl || PLACEHOLDER_IMG}" alt="${item.name}" width="96" height="96" loading="lazy" decoding="async" class="w-24 h-24 rounded-lg object-cover">
                                 ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
                                 ${item.promo ? '<span class="absolute -bottom-1 -right-1 text-white text-[8px] leading-none font-extrabold px-1.5 py-[3px] rounded shadow-md whitespace-nowrap promo-badge-pulse" style="background:linear-gradient(90deg,#DC2626,#EAB934);">🎉 โปรฯ</span>' : ''}
                             </div>
@@ -880,6 +939,7 @@
 
         function ensureLiffInit() {
             if (!liffInitPromise) {
+                if (typeof liff === 'undefined') return Promise.reject(new Error('LIFF SDK ยังโหลดไม่เสร็จ'));
                 liffInitPromise = liff.init({ liffId: MY_LIFF_ID });
             }
             return liffInitPromise;
@@ -895,6 +955,126 @@
 
         // ธงยกเลิก ใช้กันไม่ให้ผลลัพธ์ที่มาช้าหลังกดยกเลิกไปแล้ว ดันมาเปิดฟอร์มขึ้นมาเอง
         const checkoutCancelled = { food: false, nw: false };
+
+        // ---------------- ล็อกอินเว็บ: Google / Facebook (Firebase Auth) ----------------
+        // ใช้โปรเจกต์ Firebase เดียวกับ Yateem TV และอยู่โดเมนเดียวกัน (yateem1433-ui.github.io)
+        // จึงล็อกอินที่หน้าไหนก็ใช้ได้ทั้งสองเว็บ - หลังบ้านตรวจ idToken กับ Google ทุกครั้ง (resolveCaller_ ใน Code.gs)
+        const FIREBASE_CONFIG = {
+            apiKey: 'AIzaSyAdLSsK9huWHQH5Hgy_Nd_xdUOgk65YYPw',
+            authDomain: 'yateem-tv.firebaseapp.com',
+            projectId: 'yateem-tv',
+            appId: '1:1016647498747:web:198fde90519c5cd29ee95e'
+        };
+        let webUser = null;            // ผู้ใช้ Google/Facebook ที่ล็อกอินอยู่ (ไม่นับบัญชี anonymous ของแชท)
+        let webAuthReady = null;       // Promise - รอจนรู้สถานะล็อกอินครั้งแรก
+        let pendingLoginType = null;   // แท็บที่กำลังจะเช็กเอาต์ตอนเปิดหน้าต่างเลือกล็อกอิน
+
+        function isSocialUser(u) {
+            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com'));
+        }
+
+        function initWebAuth() {
+            if (webAuthReady) return webAuthReady;
+            webAuthReady = new Promise((resolve) => {
+                try {
+                    if (typeof firebase === 'undefined') { resolve(null); return; }
+                    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+                    const auth = firebase.auth();
+                    // จบขั้นตอนล็อกอินแบบ redirect (ถ้าเพิ่งกลับมาจากหน้า Google/Facebook)
+                    auth.getRedirectResult().catch((err) => { if (err && err.code) alert(loginErrorText(err)); });
+                    let first = true;
+                    auth.onAuthStateChanged((u) => {
+                        webUser = isSocialUser(u) ? u : null;
+                        if (first) { first = false; resolve(webUser); }
+                    });
+                    setTimeout(() => { if (first) { first = false; resolve(null); } }, 6000);
+                } catch (err) {
+                    resolve(null);
+                }
+            });
+            return webAuthReady;
+        }
+
+        function loginErrorText(err) {
+            const code = (err && err.code) || '';
+            if (code === 'auth/account-exists-with-different-credential') return 'อีเมลนี้เคยเข้าสู่ระบบด้วยอีกช่องทางแล้ว กรุณาใช้ช่องทางเดิมค่ะ';
+            if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
+            if (code === 'auth/unauthorized-domain' || code === 'auth/operation-not-allowed') return 'ระบบล็อกอินนี้ยังไม่เปิดใช้งาน กรุณาเข้าสู่ระบบด้วย LINE ไปก่อนนะคะ';
+            return 'เข้าสู่ระบบไม่สำเร็จ: ' + (err && err.message ? err.message : code);
+        }
+
+        // ข้อมูลตัวตนที่แนบไปกับทุกคำขอที่เกี่ยวกับลูกค้า: เว็บ = idToken (หลังบ้านตรวจเอง), LINE = userId แบบเดิม
+        async function identityParams() {
+            if (webUser) return { idToken: await webUser.getIdToken() };
+            return { userId: profile.userId };
+        }
+
+        function closeLoginChooser() {
+            document.getElementById('open-in-line-notice').classList.add('hidden');
+        }
+
+        async function webLogin(providerName) {
+            const type = pendingLoginType || currentTab();
+            saveCheckoutState(type);
+            closeLoginChooser();
+            await initWebAuth();
+            if (typeof firebase === 'undefined') { alert('โหลดระบบล็อกอินไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ'); return; }
+            const provider = providerName === 'facebook' ? new firebase.auth.FacebookAuthProvider() : new firebase.auth.GoogleAuthProvider();
+            try {
+                // popup ก่อน (ใช้ได้ทั้งตอนเปิดเต็มจอและตอนถูกฝังในแท็บ Market ของ Yateem TV)
+                const res = await firebase.auth().signInWithPopup(provider);
+                webUser = isSocialUser(res.user) ? res.user : null;
+                try { sessionStorage.removeItem(RESUME_STORAGE_KEY); } catch (e) {}
+                if (webUser) proceedToCheckout(type);
+            } catch (err) {
+                const code = (err && err.code) || '';
+                if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                    if (window.self !== window.top) {
+                        // ถูกฝังอยู่ใน iframe - ย้ายไปเปิดร้านเต็มหน้าก่อนแล้วค่อยล็อกอิน
+                        window.top.location.href = location.href;
+                        return;
+                    }
+                    firebase.auth().signInWithRedirect(provider);
+                    return;
+                }
+                const msg = loginErrorText(err);
+                if (msg) alert(msg);
+            }
+        }
+
+        async function lineLogin() {
+            const type = pendingLoginType || currentTab();
+            closeLoginChooser();
+            if (window.self !== window.top) {
+                // หน้าล็อกอิน LINE เปิดใน iframe ไม่ได้ - ย้ายไปเปิดร้านเต็มหน้าก่อน
+                saveCheckoutState(type);
+                window.top.location.href = location.href;
+                return;
+            }
+            try {
+                await withTimeout(ensureLiffInit(), 8000, 'timeout');
+                saveCheckoutState(type);
+                liff.login({ redirectUri: location.href.split('#')[0] });
+            } catch (err) {
+                // LIFF ใช้ไม่ได้ในหน้านี้ (เช่นถูกฝังใน iframe) - เปิดร้านผ่านแอป LINE แทน
+                location.href = 'https://liff.line.me/' + MY_LIFF_ID;
+            }
+        }
+
+        function webLogout() {
+            try { if (typeof firebase !== 'undefined' && firebase.apps.length) firebase.auth().signOut(); } catch (e) {}
+            webUser = null;
+        }
+
+        function currentTab() {
+            return document.getElementById('panel-food') && !document.getElementById('panel-food').classList.contains('hidden') ? 'food' : 'nw';
+        }
+
+        // ปุ่ม "ปิดหน้าต่าง": ในแอป LINE ปิดได้จริง, นอก LINE กลับไปหน้าร้าน
+        function closePage() {
+            try { if (typeof liff !== 'undefined' && liff.isInClient()) { liff.closeWindow(); return; } } catch (e) {}
+            location.href = location.pathname;
+        }
 
         function cancelCheckout(type) {
             checkoutCancelled[type] = true;
@@ -923,6 +1103,10 @@
             pendingResume = null;
             restoreCart(type, cart);
 
+            // กลับมาจากล็อกอิน Google/Facebook แบบ redirect
+            await initWebAuth();
+            if (webUser) { await continueCheckout(type); return; }
+
             try {
                 await withTimeout(ensureLiffInit(), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป');
             } catch (err) {
@@ -943,22 +1127,25 @@
             btnNext.innerText = 'กำลังตรวจสอบ...';
             btnCancel.classList.remove('hidden');
 
+            // 1) ล็อกอิน Google/Facebook อยู่แล้ว (จากร้านนี้หรือจากหน้า Yateem TV) - ไปต่อได้เลย
+            await initWebAuth();
+            if (checkoutCancelled[type]) return;
+            if (webUser) { await continueCheckout(type); return; }
+
+            // 2) LINE
+            let liffOk = true;
             try {
                 await withTimeout(ensureLiffInit(), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
             } catch (err) {
-                if (checkoutCancelled[type]) return;
-                resetCheckoutButton(type);
-                alert('เชื่อมต่อ LINE ไม่สำเร็จ: ' + err.message);
-                return;
+                liffOk = false;
             }
             if (checkoutCancelled[type]) return;
 
-            if (!liff.isLoggedIn()) {
-                if (!liff.isInClient()) {
-                    // เปิดนอกแอป LINE (เบราว์เซอร์ปกติ) - หน้าเว็บของ Apps Script ถูกฝังใน iframe
-                    // แบบ sandbox เสมอ ทำให้หน้า login ของ LINE ปฏิเสธไม่ยอมให้แสดงผลอยู่ดี
-                    // ไม่ว่าจะปรับ redirectUri ยังไงก็ตาม จึงให้ดูสินค้าต่อได้ แต่ต้องสั่งซื้อผ่านแอป LINE เท่านั้น
+            if (!liffOk || !liff.isLoggedIn()) {
+                if (!liffOk || !liff.isInClient()) {
+                    // นอกแอป LINE - ให้เลือกล็อกอินด้วย Google / Facebook / LINE ได้เลย ไม่บังคับ LINE อย่างเดียวแล้ว
                     resetCheckoutButton(type);
+                    pendingLoginType = type;
                     showOpenInLineNotice();
                     return;
                 }
@@ -976,14 +1163,16 @@
         }
 
         async function continueCheckout(type) {
+            let idp;
             try {
-                if (!profile.userId) {
+                if (!webUser && !profile.userId) {
                     profile = await liff.getProfile();
                 }
+                idp = await identityParams();
             } catch (err) {
                 if (checkoutCancelled[type]) return;
                 resetCheckoutButton(type);
-                alert('ดึงข้อมูลโปรไฟล์ LINE ไม่สำเร็จ: ' + err.message);
+                alert('ดึงข้อมูลบัญชีไม่สำเร็จ: ' + err.message);
                 return;
             }
             if (checkoutCancelled[type]) return;
@@ -991,7 +1180,7 @@
             if (type === 'food') {
                 // เดี๋ยวนี้ไม่บังคับเช็กอินสะสมแต้มบนทีวีก่อนสั่งอาหารแล้ว - verifyBkkUser แค่ช่วยเติมชื่อ/เบอร์/ที่อยู่ให้อัตโนมัติถ้ามีข้อมูลเดิม
                 // พื้นที่จัดส่งจริงเช็กจากคำในที่อยู่ตอนกรอกฟอร์ม (checkFoodAddressArea) + เช็กซ้ำฝั่งเซิร์ฟเวอร์ตอนกดส่งออเดอร์
-                callApi('verifyBkkUser', { userId: profile.userId })
+                callApi('verifyBkkUser', idp)
                     .then((result) => {
                         if (checkoutCancelled.food) return;
                         bkkVerification = result;
@@ -1010,7 +1199,7 @@
                         checkFoodAddressArea();
                     });
             } else {
-                callApi('getCustomerProfile', { userId: profile.userId })
+                callApi('getCustomerProfile', idp)
                     .then((customerProfile) => {
                         if (checkoutCancelled.nw) return;
                         if (customerProfile) {
@@ -1099,7 +1288,7 @@
             });
 
             const orderData = {
-                userId: profile.userId,
+                userId: webUser ? '' : profile.userId,   // ผู้ใช้เว็บ: หลังบ้านเติม userId จาก idToken เอง
                 fullname: fullname,
                 phone: phone,
                 address: address,
@@ -1113,7 +1302,8 @@
                 const slipBase64 = await resizeImageBase64(slipFile, 1600, 0.85);
                 const slipName = `${fullname.replace(/ /g,'_')}_${new Date().getTime()}.png`;
 
-                callApi('submitOrder', { orderData: orderData, slipBase64: slipBase64, slipName: slipName })
+                const idp = await identityParams();
+                callApi('submitOrder', Object.assign({ orderData: orderData, slipBase64: slipBase64, slipName: slipName }, idp))
                     .then((res) => {
                         if (res.success) {
                             state.food.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
@@ -1177,7 +1367,7 @@
             const shippingFee = paymentMethod === 'cod' && nwPaymentSettings ? nwPaymentSettings.codShippingFee : 0;
 
             const orderData = {
-                userId: profile.userId,
+                userId: webUser ? '' : profile.userId,   // ผู้ใช้เว็บ: หลังบ้านเติม userId จาก idToken เอง
                 fullname: fullname,
                 phone: phone,
                 address: address,
@@ -1193,7 +1383,8 @@
                 const slipBase64 = slipFile ? await resizeImageBase64(slipFile, 1600, 0.85) : null;
                 const slipName = slipFile ? `${fullname.replace(/ /g,'_')}_${new Date().getTime()}.png` : null;
 
-                callApi('submitNationwideOrder', { orderData: orderData, slipBase64: slipBase64, slipName: slipName })
+                const idp = await identityParams();
+                callApi('submitNationwideOrder', Object.assign({ orderData: orderData, slipBase64: slipBase64, slipName: slipName }, idp))
                     .then((res) => {
                         if (res.success) {
                             const msg = paymentMethod === 'cod'
@@ -1406,7 +1597,7 @@
                 return `
                     <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0 gap-2">
                         <div class="flex items-center gap-2 flex-1 min-w-0">
-                            <img src="${item.imageUrl || 'https://via.placeholder.com/150'}" alt="${escapeHtml(item.name)}" class="w-10 h-10 rounded object-cover flex-shrink-0">
+                            <img src="${item.imageUrl || PLACEHOLDER_IMG}" alt="${escapeHtml(item.name)}" loading="lazy" class="w-10 h-10 rounded object-cover flex-shrink-0">
                             <div class="min-w-0 flex-1">
                                 <p class="text-sm font-semibold text-gray-800 truncate">${escapeHtml(item.name)}</p>
                                 <div class="flex items-center gap-1.5 flex-wrap">
