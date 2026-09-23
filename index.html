@@ -360,14 +360,13 @@
 
     </div>
 
-    <!-- เลือกวิธีเข้าสู่ระบบก่อนสั่งซื้อ (นอกแอป LINE) - Google / Facebook / LINE -->
+    <!-- เลือกวิธีเข้าสู่ระบบก่อนสั่งซื้อ (นอกแอป LINE) - Google / LINE (ปุ่ม Facebook ปิดไว้ชั่วคราว รอ Meta ยืนยันธุรกิจ) -->
     <div id="open-in-line-notice" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
             <p class="text-5xl mb-3">👤</p>
             <h2 class="text-lg font-bold text-gray-800 mb-2">เข้าสู่ระบบเพื่อสั่งซื้อ</h2>
             <p class="text-sm text-gray-600 mb-5">เลือกบัญชีที่สะดวกได้เลยค่ะ ใช้บัญชีเดิมทุกครั้งเพื่อติดตามออเดอร์ได้ครบ</p>
             <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
-            <button onclick="webLogin('facebook')" class="block w-full text-white font-bold py-3 rounded-lg mb-2" style="background:#1877F2">f&nbsp; เข้าสู่ระบบด้วย Facebook</button>
             <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">💬 เข้าสู่ระบบด้วย LINE</button>
             <a id="open-in-line-link" href="#" class="block text-sm text-green-700 underline mb-3">หรือเปิดร้านในแอป LINE</a>
             <button onclick="closeLoginChooser()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
