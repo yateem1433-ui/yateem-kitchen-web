@@ -6,6 +6,8 @@
     <meta name="theme-color" content="#0E2036">
     <meta name="robots" content="noindex">
     <title>บอทครัว Yateem</title>
+    <link rel="manifest" href="manifest-voice.json">
+    <link rel="apple-touch-icon" href="icon.jpg">
     <style>
         :root {
             --bg: #0E2036; --card: #163150; --card-2: #1d3d62; --line: #2a4c74;
@@ -27,6 +29,9 @@
         .btn-primary { background: var(--accent); color: #1a1200; font-weight: 700; width: 100%; padding: 14px; }
         .btn-start { background: var(--green); color: #052e12; font-size: 28px; font-weight: 800; padding: 28px 20px; width: 100%; border-radius: 20px; }
         .error { color: #fca5a5; min-height: 1.2em; margin: 0; }
+        .app-icon { width: 96px; height: 96px; border-radius: 22px; }
+        .steps { text-align: left; background: var(--card); border-radius: 14px; padding: 14px 16px 14px 34px; margin: 0; line-height: 1.7; width: 100%; }
+        .btn-link { background: transparent; color: var(--muted); text-decoration: underline; }
 
         header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .pill { padding: 8px 12px; border-radius: 999px; background: var(--card); font-size: 15px; }
@@ -86,6 +91,34 @@
     </style>
 </head>
 <body>
+
+<!-- 0) Android ต้องติดตั้งเป็นแอปบนหน้าจอหลักก่อน (เต็มจอ ไม่มีแถบ Chrome ปิดแท็บพลาดไม่ได้) -->
+<div id="screen-install" class="screen hidden">
+    <img src="icon.jpg" alt="" class="app-icon">
+    <h1>📲 ติดตั้งแอปบอทครัวก่อนใช้งาน</h1>
+    <p class="muted" id="install-lead">บนมือถือ Android ต้องเปิดบอทครัวจากไอคอนบนหน้าจอหลักเท่านั้นค่ะ<br>
+        จะได้เปิดเต็มจอ ไม่ปิดแท็บพลาด และจอไม่ดับเอง</p>
+
+    <!-- เปิดในแอป LINE / Facebook: ติดตั้งไม่ได้ ต้องไปเปิดใน Chrome ก่อน -->
+    <div id="install-inapp" class="hidden" style="width:100%">
+        <p>ตอนนี้เปิดอยู่ในแอปอื่น (เช่น LINE) ซึ่งติดตั้งไม่ได้ค่ะ</p>
+        <button id="btn-open-chrome" class="btn-primary">เปิดใน Chrome</button>
+        <p class="muted" style="font-size:14px">ถ้ากดแล้วไม่ไป: แตะ ⋮ หรือ ↗ มุมจอ แล้วเลือก "เปิดในเบราว์เซอร์"</p>
+    </div>
+
+    <button id="btn-install" class="btn-start hidden">📲 ติดตั้งแอปบอทครัว</button>
+
+    <ol id="install-manual" class="steps hidden">
+        <li>แตะ <b>⋮</b> มุมขวาบนของ Chrome</li>
+        <li>เลือก <b>"ติดตั้งแอป"</b> หรือ <b>"เพิ่มลงในหน้าจอหลัก"</b></li>
+        <li>กด <b>"ติดตั้ง"</b> แล้วเปิดจากไอคอน <b>"บอทครัว"</b> บนหน้าจอ</li>
+    </ol>
+
+    <p id="install-done" class="hidden" style="font-size:18px;font-weight:700">✅ ติดตั้งเรียบร้อยค่ะ<br>
+        ปิดหน้านี้ แล้วเปิดจากไอคอน "บอทครัว" บนหน้าจอหลักได้เลย</p>
+
+    <p class="muted" style="font-size:14px">ติดตั้งไว้แล้ว? ให้เปิดจากไอคอน "บอทครัว" บนหน้าจอหลัก ไม่ต้องเปิดจากลิงก์นี้ค่ะ</p>
+</div>
 
 <!-- 1) ใส่รหัสแอดมิน -->
 <div id="screen-login" class="screen hidden">
@@ -825,7 +858,7 @@
     }
 
     function show(screen) {
-        ['screen-login', 'screen-start', 'screen-main'].forEach(id => $(id).classList.toggle('hidden', id !== screen));
+        ['screen-install', 'screen-login', 'screen-start', 'screen-main'].forEach(id => $(id).classList.toggle('hidden', id !== screen));
     }
 
     function logout(message) {
@@ -951,13 +984,63 @@
     });
     $('btn-logout').addEventListener('click', () => logout(''));
 
+    // ===== บังคับติดตั้งเป็นแอป (เฉพาะ Android) =====
+    // คอม/iPhone ใช้ผ่านเบราว์เซอร์ได้ตามเดิม (แอดมินใช้ทดสอบบนคอม) - มือถือครัวที่เป็น Android ต้องเปิดจากไอคอนเท่านั้น
+    const IS_ANDROID = /Android/i.test(navigator.userAgent);
+    const IS_IN_APP = /Line\/|FBAN|FBAV|FB_IAB|Instagram|; wv\)/i.test(navigator.userAgent);
+    let installPrompt = null;
+    let installedJustNow = false;
+
+    function isInstalledApp() {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+            window.matchMedia('(display-mode: fullscreen)').matches;
+    }
+
+    function renderInstall() {
+        $('install-inapp').classList.toggle('hidden', !IS_IN_APP || installedJustNow);
+        $('btn-install').classList.toggle('hidden', IS_IN_APP || !installPrompt || installedJustNow);
+        // Chrome ไม่ส่ง prompt ให้ (เคยกดปิด/ติดตั้งแล้ว/เบราว์เซอร์อื่น) - บอกวิธีกดเองแทน
+        $('install-manual').classList.toggle('hidden', IS_IN_APP || !!installPrompt || installedJustNow);
+        $('install-done').classList.toggle('hidden', !installedJustNow);
+    }
+
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault(); // เก็บไว้ให้กดจากปุ่มใหญ่ของเราเอง
+        installPrompt = e;
+        renderInstall();
+    });
+    window.addEventListener('appinstalled', () => {
+        installPrompt = null;
+        installedJustNow = true;
+        renderInstall();
+    });
+    $('btn-install').addEventListener('click', async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        try { await installPrompt.userChoice; } catch (e) {}
+        installPrompt = null; // ใช้ได้ครั้งเดียว - ถ้ากดยกเลิกจะเหลือวิธีกดเองจากเมนู
+        renderInstall();
+    });
+    $('btn-open-chrome').addEventListener('click', () => {
+        // intent:// ของ Android เปิดลิงก์นี้ในแอป Chrome ออกจาก webview ของ LINE/Facebook
+        location.href = 'intent://' + location.host + location.pathname + '#Intent;scheme=https;package=com.android.chrome;end';
+    });
+
     // ===== เริ่มต้น =====
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw-voice.js', { scope: './voice.html' }).catch(() => {});
+    }
     if ('speechSynthesis' in window) {
         pickVoice();
         speechSynthesis.onvoiceschanged = pickVoice;
     }
-    show(state.adminKey ? 'screen-start' : 'screen-login');
-    if (state.adminKey) poll(); // โหลดรายการไว้ก่อน ระหว่างรอแตะ "เริ่มเวรครัว"
+    if (IS_ANDROID && !isInstalledApp()) {
+        renderInstall();
+        show('screen-install'); // บล็อกทั้งหน้า ไม่โหลดออเดอร์ ไม่ใส่รหัส จนกว่าจะเปิดจากไอคอน
+    } else {
+        show(state.adminKey ? 'screen-start' : 'screen-login');
+        if (state.adminKey) poll(); // โหลดรายการไว้ก่อน ระหว่างรอแตะ "เริ่มเวรครัว"
+    }
 </script>
 </body>
 </html>
