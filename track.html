@@ -133,6 +133,12 @@
         // ทั้งวันจะกินโควตารันสคริปต์ของ Apps Script (~90 นาที/วัน) จนหมด กระทบลูกค้าคนอื่นทั้งระบบ
         // ยืดเป็น 45 วิ + หยุด poll เมื่อสลับแท็บออก (ดู setupVisibilityPause) ลดภาระลงมาก
         const POLL_INTERVAL_MS = 45000;
+        // ออเดอร์ที่กำลังดำเนินการเป็นไฟเขียวหมดแล้ว (พร้อมส่ง/ส่งแล้ว) สถานะแทบไม่เปลี่ยนอีก - ถามห่างขึ้น
+        const POLL_SLOW_MS = 120000;
+        // ไม่มีออเดอร์ที่กำลังดำเนินการเลย = ไม่ต้อง poll (ยังรีเฟรชทุกครั้งที่กลับมาเปิดหน้านี้)
+        // หน้านี้เปิดค้างพร้อมกันหลายร้อยคนได้ และทุกรอบ poll กินช่องรันพร้อมกันของ Apps Script (~30 ช่องทั้งระบบ)
+        // ร่วมกับคนที่กำลังกดสั่ง - ยิ่งถามน้อยตอนไม่จำเป็น ช่องเหลือให้คนสั่งมากขึ้น
+        let pollIntervalMs = POLL_INTERVAL_MS;
 
         // action ที่อ่านข้อมูลอย่างเดียว (ไม่มีผลข้างเคียง) เท่านั้นที่ retry อัตโนมัติได้อย่างปลอดภัย -
         // markOrderReceived/submitClaim/submitReview ห้าม retry อัตโนมัติ เพราะถ้าเขียนสำเร็จแล้วแต่ response หลุดหาย
@@ -399,14 +405,26 @@
         }
 
         function startPolling() {
-            if (pollTimer) return;
-            pollTimer = setInterval(() => refreshOrders(false), POLL_INTERVAL_MS);
+            if (pollTimer || pollIntervalMs <= 0) return;
+            pollTimer = setInterval(() => refreshOrders(false), pollIntervalMs);
         }
 
         function stopPolling() {
             if (!pollTimer) return;
             clearInterval(pollTimer);
             pollTimer = null;
+        }
+
+        // ปรับความถี่ poll ตามออเดอร์ที่ได้มาล่าสุด (นิยาม "กำลังดำเนินการ" เดียวกับแท็บ active ใน renderOrders)
+        function adjustPolling(res) {
+            if (!res || !res.success) return; // ผลพัง ไม่รู้สถานะจริง - คงความถี่เดิมไว้
+            const active = (res.orders || []).filter((order) => !order.receivedStatus && !order.claim);
+            const next = active.length === 0 ? 0
+                : (active.every((order) => order.lightStatus === 'green') ? POLL_SLOW_MS : POLL_INTERVAL_MS);
+            if (next === pollIntervalMs) return;
+            pollIntervalMs = next;
+            stopPolling();
+            if (document.visibilityState !== 'hidden') startPolling();
         }
 
         // หยุด poll ตอนลูกค้าสลับไปแท็บ/แอปอื่น (ไม่มีใครดูอยู่ ไม่ต้องยิงขอข้อมูลทุก 45 วิเปล่าๆ)
@@ -439,7 +457,7 @@
             const uid = currentUserId;
             return identityParams()
                 .then((idp) => callApi('getMyOrders', idp))
-                .then((res) => { saveCachedOrders(uid, res); renderOrders(res, isFirstLoad); })
+                .then((res) => { saveCachedOrders(uid, res); renderOrders(res, isFirstLoad); adjustPolling(res); })
                 .catch((err) => {
                     if (isFirstLoad) showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message);
                     // โพลรอบถัดไปพลาด ไม่ต้องรบกวนลูกค้าด้วย error เต็มจอ รอรอบถัดไปแทน
