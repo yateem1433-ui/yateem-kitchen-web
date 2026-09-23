@@ -374,14 +374,25 @@
         </div>
     </div>
 
-    <div id="reviews-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 max-h-[85vh] overflow-y-auto">
-            <h2 id="reviews-modal-title" class="text-lg font-bold text-gray-800 mb-1">รีวิว</h2>
-            <p id="reviews-modal-summary" class="text-xs text-gray-500 mb-4"></p>
-            <div id="reviews-modal-loading" class="text-center py-6 text-gray-500">กำลังโหลดรีวิว...</div>
-            <div id="reviews-modal-empty" class="hidden text-center py-6 text-gray-400">ยังไม่มีรีวิวสำหรับสินค้านี้</div>
-            <div id="reviews-modal-list" class="space-y-4"></div>
-            <button onclick="closeReviewsModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg mt-4">ปิด</button>
+    <!-- รีวิวสินค้า: แผ่นเลื่อนจากล่าง - เลื่อนอ่านในกล่องได้, ปัดลงเพื่อปิด, แตะพื้นหลังหรือ × เพื่อปิด
+         (เดิมใช้ max-h-[85vh] ซึ่ง Tailwind 2.2 แบบ CDN ไม่รองรับ กล่องเลยสูงเกินจอ เลื่อนไม่ได้ ปุ่มปิดตกขอบ
+          โดยเฉพาะตอนร้านถูกฝังในแท็บ Market ของ Yateem TV ที่ความสูงจำกัด) -->
+    <div id="reviews-modal" class="hidden fixed inset-0 z-50 flex items-end justify-center" style="background:rgba(0,0,0,.5)" onclick="if(event.target===this)closeReviewsModal()">
+        <div id="reviews-sheet" class="bg-white shadow-xl w-full max-w-sm" style="max-height:85vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom)">
+            <div id="reviews-grab" style="padding:10px 16px 6px;touch-action:none">
+                <div style="width:44px;height:5px;border-radius:3px;background:#d1d5db;margin:0 auto 10px"></div>
+                <div class="flex items-start justify-between gap-2">
+                    <h2 id="reviews-modal-title" class="text-lg font-bold text-gray-800">รีวิว</h2>
+                    <button onclick="closeReviewsModal()" aria-label="ปิด" class="text-gray-400 text-3xl leading-none px-2 -mt-1">×</button>
+                </div>
+                <p id="reviews-modal-summary" class="text-xs text-gray-500"></p>
+            </div>
+            <div id="reviews-scroll" style="overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:8px 16px 16px;flex:1;min-height:0">
+                <div id="reviews-modal-loading" class="text-center py-6 text-gray-500">กำลังโหลดรีวิว...</div>
+                <div id="reviews-modal-empty" class="hidden text-center py-6 text-gray-400">ยังไม่มีรีวิวสำหรับสินค้านี้</div>
+                <div id="reviews-modal-list" class="space-y-4"></div>
+                <button onclick="closeReviewsModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg mt-4">ปิด</button>
+            </div>
         </div>
     </div>
 
@@ -629,6 +640,9 @@
             } else if (!fromCache) {
                 loadFoodMenu();
             }
+
+            // โหลดรีวิวรอไว้เบื้องหลัง - กดดูรีวิวแล้วขึ้นทันที
+            setTimeout(() => { loadFirebaseReviews().catch(() => {}); }, 1500);
 
             // สลับไปแท็บอาหารช่วงเปิดขาย - ทำครั้งแรกครั้งเดียว ไม่สลับแท็บทับตอนอัปเดตเบื้องหลัง
             if (!pendingResume && !isRefresh) {
@@ -904,6 +918,27 @@
             }
         }
 
+        // รีวิวทุกสินค้าที่หลังบ้านส่งขึ้น Firebase ไว้ (kitchen/reviews) - โหลดครั้งเดียวใช้ทั้งหน้า
+        // เร็วกว่าถาม Apps Script (3-10 วิ) มาก | ถ้าไม่มี/เก่าเกิน 30 นาที/พัง = ถอยไป getMenuReviews แบบเดิม
+        const KITCHEN_REVIEWS_URL = 'https://yateem-tv-default-rtdb.asia-southeast1.firebasedatabase.app/kitchen/reviews.json';
+        let firebaseReviewsPromise = null;
+        function loadFirebaseReviews() {
+            if (!firebaseReviewsPromise) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 6000);
+                firebaseReviewsPromise = fetch(KITCHEN_REVIEWS_URL, { cache: 'no-store', signal: controller.signal })
+                    .then((res) => { if (!res.ok) throw new Error('firebase ' + res.status); return res.json(); })
+                    .then((wrapped) => {
+                        if (!wrapped || !wrapped.json || !wrapped.publishedAt) throw new Error('firebase empty');
+                        if (Date.now() - wrapped.publishedAt > FIREBASE_BOOTSTRAP_MAX_AGE_MS) throw new Error('firebase stale');
+                        return JSON.parse(wrapped.json) || {};
+                    })
+                    .catch((err) => { firebaseReviewsPromise = null; throw err; }) // พลาด = ครั้งหน้าลองใหม่
+                    .finally(() => clearTimeout(timer));
+            }
+            return firebaseReviewsPromise;
+        }
+
         function openReviewsModal(menuId, menuName) {
             document.getElementById('reviews-modal-title').innerText = '⭐ รีวิว: ' + menuName;
             document.getElementById('reviews-modal-summary').innerText = '';
@@ -911,9 +946,13 @@
             document.getElementById('reviews-modal-empty').classList.add('hidden');
             document.getElementById('reviews-modal-empty').innerText = 'ยังไม่มีรีวิวสำหรับสินค้านี้';
             document.getElementById('reviews-modal-loading').classList.remove('hidden');
+            document.getElementById('reviews-scroll').scrollTop = 0;
             document.getElementById('reviews-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // กันหน้าร้านด้านหลังเลื่อนตามนิ้ว
 
-            callApi('getMenuReviews', { menuId: menuId, limit: 30 })
+            loadFirebaseReviews()
+                .then((map) => (map[String(menuId)] || []).slice(0, 30))
+                .catch(() => callApi('getMenuReviews', { menuId: menuId, limit: 30 }))
                 .then((reviews) => {
                     document.getElementById('reviews-modal-loading').classList.add('hidden');
                     if (!reviews || reviews.length === 0) {
@@ -956,7 +995,47 @@
 
         function closeReviewsModal() {
             document.getElementById('reviews-modal').classList.add('hidden');
+            const sheet = document.getElementById('reviews-sheet');
+            sheet.style.transition = '';
+            sheet.style.transform = '';
+            document.body.style.overflow = ''; // คืนการเลื่อนหน้าหลัง
         }
+
+        // ปัดลงเพื่อปิดแผ่นรีวิว: ลากจากหัวแผ่น หรือจากรายการรีวิวตอนเลื่อนอยู่บนสุดแล้ว
+        (function setupReviewsSwipeToClose() {
+            const sheet = document.getElementById('reviews-sheet');
+            const scroller = document.getElementById('reviews-scroll');
+            let startY = null;
+            let dy = 0;
+            sheet.addEventListener('touchstart', (e) => {
+                // กำลังเลื่อนอ่านรีวิวอยู่กลางรายการ - ปล่อยให้เลื่อนตามปกติ ไม่ใช่การปัดปิด
+                if (scroller.contains(e.target) && scroller.scrollTop > 0) { startY = null; return; }
+                startY = e.touches[0].clientY;
+                dy = 0;
+                sheet.style.transition = 'none';
+            }, { passive: true });
+            sheet.addEventListener('touchmove', (e) => {
+                if (startY === null) return;
+                dy = e.touches[0].clientY - startY;
+                if (dy > 0) {
+                    sheet.style.transform = 'translateY(' + dy + 'px)';
+                    if (e.cancelable) e.preventDefault();
+                } else {
+                    sheet.style.transform = '';
+                }
+            }, { passive: false });
+            sheet.addEventListener('touchend', () => {
+                if (startY === null) return;
+                startY = null;
+                sheet.style.transition = 'transform .2s ease';
+                if (dy > 90) {
+                    sheet.style.transform = 'translateY(100%)';
+                    setTimeout(closeReviewsModal, 180);
+                } else {
+                    sheet.style.transform = '';
+                }
+            });
+        })();
 
         // ---------------- LIFF: เรียกแบบ lazy ตอนกดเช็กเอาต์เท่านั้น ----------------
 
