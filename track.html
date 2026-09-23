@@ -281,6 +281,7 @@
         }
 
         function webLogout() {
+            clearCachedOrders(); // ออกจากระบบ = ลบออเดอร์ที่เก็บไว้ในเครื่องด้วย (เครื่องอาจใช้ร่วมกับคนอื่น)
             try { firebase.auth().signOut().then(() => location.reload()); } catch (e) { location.reload(); }
         }
 
@@ -294,60 +295,107 @@
             document.getElementById('not-in-client').classList.remove('hidden');
         }
 
+        // ---------------- ออเดอร์ล่าสุดที่เคยโหลด เก็บไว้ในเครื่อง (แยกตามบัญชี) ----------------
+        // เปิดหน้าครั้งถัดไปโชว์ได้ทันที แล้วค่อยอัปเดตเบื้องหลัง - ไม่ต้องจ้อง "กำลังตรวจสอบสถานะ..." ระหว่างรอ Apps Script
+        const ORDERS_STORAGE_PREFIX = 'yateemOrders_';
+        const LAST_LINE_UID_KEY = 'yateemLastLineUid';
+
+        function readCachedOrders(uid) {
+            try { return JSON.parse(localStorage.getItem(ORDERS_STORAGE_PREFIX + uid) || 'null'); } catch (e) { return null; }
+        }
+        function saveCachedOrders(uid, res) {
+            try { if (uid && res && res.success) localStorage.setItem(ORDERS_STORAGE_PREFIX + uid, JSON.stringify(res)); } catch (e) { /* เต็ม/โหมดส่วนตัว */ }
+        }
+        function clearCachedOrders() {
+            try {
+                Object.keys(localStorage).forEach((k) => { if (k.indexOf(ORDERS_STORAGE_PREFIX) === 0) localStorage.removeItem(k); });
+                localStorage.removeItem(LAST_LINE_UID_KEY);
+            } catch (e) {}
+        }
+
+        let shownFromCache = false;
+        function showCachedOrders(uid) {
+            const cached = readCachedOrders(uid);
+            if (!cached || !cached.success) return;
+            currentUserId = uid;
+            renderOrders(cached, true);
+            shownFromCache = true;
+            document.getElementById('last-updated').innerText = 'กำลังอัพเดตสถานะล่าสุด...';
+        }
+
+        function startOrdersFor(uid) {
+            if (shownFromCache && currentUserId !== uid) {
+                // ที่โชว์ไว้เป็นของบัญชีอื่นที่เคยใช้เครื่องนี้ - ซ่อนก่อน แล้วโหลดของบัญชีจริง
+                shownFromCache = false;
+                document.getElementById('status-container').classList.add('hidden');
+                document.getElementById('no-orders').classList.add('hidden');
+                document.getElementById('loading').classList.remove('hidden');
+            }
+            currentUserId = uid;
+            if (!shownFromCache) showCachedOrders(uid);
+            refreshOrders(!shownFromCache);
+            startPolling();
+            setupVisibilityPause();
+        }
+
+        function showWebAccount() {
+            const acc = document.getElementById('web-account');
+            const provider = (webUser.providerData || []).some(p => p.providerId === 'facebook.com') ? 'Facebook' : 'Google';
+            acc.textContent = '';
+            acc.append('เข้าสู่ระบบด้วย ' + provider + ': ' + (webUser.displayName || webUser.email || '') + ' · ');
+            const out = document.createElement('a');
+            out.href = 'javascript:void(0)'; out.className = 'underline'; out.textContent = 'ออกจากระบบ';
+            out.onclick = webLogout;
+            acc.appendChild(out);
+            acc.classList.remove('hidden');
+        }
+
         async function main() {
             document.getElementById('open-in-line-link').href = 'https://liff.line.me/' + MY_LIFF_ID;
 
-            // 1) ล็อกอิน Google/Facebook อยู่แล้ว (จากหน้าร้านหรือหน้า Yateem TV)
-            await initWebAuth();
-            if (webUser) {
-                currentUserId = 'fb:' + webUser.uid;   // ตรงกับ userId ที่หลังบ้านบันทึก (ไว้แจ้งแอดมิน)
-                const acc = document.getElementById('web-account');
-                const provider = (webUser.providerData || []).some(p => p.providerId === 'facebook.com') ? 'Facebook' : 'Google';
-                acc.textContent = '';
-                acc.append('เข้าสู่ระบบด้วย ' + provider + ': ' + (webUser.displayName || webUser.email || '') + ' · ');
-                const out = document.createElement('a');
-                out.href = 'javascript:void(0)'; out.className = 'underline'; out.textContent = 'ออกจากระบบ';
-                out.onclick = webLogout;
-                acc.appendChild(out);
-                acc.classList.remove('hidden');
-                refreshOrders(true);
-                startPolling();
-                setupVisibilityPause();
-                return;
+            // เริ่มเช็กทั้ง Google (Firebase) และ LINE "พร้อมกัน" - เดิมรอทีละอย่าง (สูงสุด 6+8 วิ) ก่อนเริ่มดึงออเดอร์
+            const inLineApp = /\bLine\//i.test(navigator.userAgent || '');
+            const webReady = initWebAuth();
+            const liffReadyP = withTimeout(liff.init({ liffId: MY_LIFF_ID }), 8000, 'timeout')
+                .then(() => { liffReady = true; return true; }, () => false);
+
+            // อยู่ในแอป LINE และเคยเปิดหน้านี้แล้ว - โชว์ออเดอร์ที่เก็บไว้ก่อนเลย ระหว่างรอ LINE ยืนยันตัวตน
+            if (inLineApp) {
+                try { const lastUid = localStorage.getItem(LAST_LINE_UID_KEY); if (lastUid) showCachedOrders(lastUid); } catch (e) {}
             }
 
-            // 2) LINE
-            try {
-                await withTimeout(liff.init({ liffId: MY_LIFF_ID }), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป');
-                liffReady = true;
-            } catch (err) {
-                // เชื่อมต่อ LINE ไม่ได้ (เช่นเปิดนอกแอป/ถูกฝังในหน้าอื่น) - ยังล็อกอินด้วย Google/Facebook ได้
-                showLoginChoices();
-                return;
-            }
-
-            if (!liff.isLoggedIn()) {
-                if (!liff.isInClient()) {
-                    // เปิดนอกแอป LINE - ให้เลือกล็อกอิน Google / Facebook / LINE
-                    showLoginChoices();
+            // นอกแอป LINE: Google ก่อน (ถ้ามีบัญชีค้างอยู่ รู้ผลในไม่ถึงวินาที)
+            if (!inLineApp) {
+                await webReady;
+                if (webUser) {
+                    showWebAccount();
+                    startOrdersFor('fb:' + webUser.uid);   // ตรงกับ userId ที่หลังบ้านบันทึก
                     return;
                 }
-                liff.login();
-                return;
             }
 
-            let profile;
-            try {
-                profile = await liff.getProfile();
-            } catch (err) {
-                showError('ดึงข้อมูลโปรไฟล์ LINE ไม่สำเร็จ: ' + err.message);
+            // LINE
+            const liffOk = await liffReadyP;
+            if (liffOk && liff.isLoggedIn()) {
+                let profile;
+                try {
+                    profile = await liff.getProfile();
+                } catch (err) {
+                    if (!shownFromCache) showError('ดึงข้อมูลโปรไฟล์ LINE ไม่สำเร็จ: ' + err.message);
+                    return;
+                }
+                try { localStorage.setItem(LAST_LINE_UID_KEY, profile.userId); } catch (e) {}
+                startOrdersFor(profile.userId);
                 return;
             }
+            if (liffOk && liff.isInClient()) { liff.login(); return; }
 
-            currentUserId = profile.userId;
-            refreshOrders(true);
-            startPolling();
-            setupVisibilityPause();
+            // ในแอป LINE แต่ LIFF ใช้ไม่ได้ - ลองบัญชี Google ที่อาจค้างอยู่
+            if (inLineApp) {
+                await webReady;
+                if (webUser) { showWebAccount(); startOrdersFor('fb:' + webUser.uid); return; }
+            }
+            showLoginChoices();
         }
 
         function startPolling() {
@@ -388,9 +436,10 @@
 
         function refreshOrders(isFirstLoad) {
             // คืน promise ไว้ให้ผู้เรียก (เช่น confirmReceived) เอาไปต่อ .then() หลังข้อมูลอัปเดตเสร็จได้
+            const uid = currentUserId;
             return identityParams()
                 .then((idp) => callApi('getMyOrders', idp))
-                .then((res) => renderOrders(res, isFirstLoad))
+                .then((res) => { saveCachedOrders(uid, res); renderOrders(res, isFirstLoad); })
                 .catch((err) => {
                     if (isFirstLoad) showError('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + err.message);
                     // โพลรอบถัดไปพลาด ไม่ต้องรบกวนลูกค้าด้วย error เต็มจอ รอรอบถัดไปแทน

@@ -16,6 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://yateem-tv-default-rtdb.asia-southeast1.firebasedatabase.app">
     <link rel="preconnect" href="https://script.google.com">
     <link rel="preconnect" href="https://script.googleusercontent.com">
     <!-- defer: ไม่บล็อกการแสดงผล/การโหลดเมนู (LIFF ใช้ตอนกดสั่งซื้อเท่านั้น) -->
@@ -562,13 +563,36 @@
                 && document.getElementById(type + '-loading').classList.contains('hidden');
         }
 
+        // เมนูฉบับที่หลังบ้านส่งขึ้น Firebase ไว้ (publishBootstrapToFirebase_ ใน Code.gs) - อ่านตรงผ่าน REST ไม่ต้องโหลด SDK
+        // ตอบในไม่ถึง 1 วิ ต่างจาก Apps Script ที่ตอบ 3-10 วิ | ถ้าไม่มี/เก่าเกิน 30 นาที/พัง = ถอยไปถาม Apps Script เหมือนเดิม
+        const KITCHEN_BOOTSTRAP_URL = 'https://yateem-tv-default-rtdb.asia-southeast1.firebasedatabase.app/kitchen/bootstrap.json';
+        const FIREBASE_BOOTSTRAP_MAX_AGE_MS = 30 * 60 * 1000;
+
+        async function fetchFirebaseBootstrap() {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 6000);
+            try {
+                const res = await fetch(KITCHEN_BOOTSTRAP_URL, { cache: 'no-store', signal: controller.signal });
+                if (!res.ok) throw new Error('firebase ' + res.status);
+                const wrapped = await res.json();
+                if (!wrapped || !wrapped.json || !wrapped.publishedAt) throw new Error('firebase empty');
+                if (Date.now() - wrapped.publishedAt > FIREBASE_BOOTSTRAP_MAX_AGE_MS) throw new Error('firebase stale');
+                const data = JSON.parse(wrapped.json);
+                if (!data || !data.nwMenu || !data.foodMenu) throw new Error('firebase incomplete');
+                return data;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         function loadBootstrap() {
             const cached = readCachedBootstrap();
             if (cached && cached.nwMenu && cached.foodMenu) {
                 lastBootstrapJson = JSON.stringify(cached);
                 applyBootstrap(cached, true);
             }
-            callApi('getBootstrap')
+            fetchFirebaseBootstrap()
+                .catch(() => callApi('getBootstrap'))
                 .then((data) => {
                     const json = JSON.stringify(data);
                     if (data && data.nwMenu && data.foodMenu) saveCachedBootstrap(data);
