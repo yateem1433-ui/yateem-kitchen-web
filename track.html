@@ -617,16 +617,26 @@
 
             const riderBlock = (lightStatus === 'green' && order.type === 'food' && !order.receivedStatus)
                 ? `<div id="rider-call-${sid}" class="mb-3">
-                    <div class="text-left bg-white bg-opacity-70 rounded-lg p-3 mb-2 text-sm">
-                        <p class="font-bold text-gray-700">📍 จุดรับอาหาร (ต้นทาง)</p>
-                        <p id="rider-pickup-${sid}" class="text-gray-600 mb-2">กำลังโหลด...</p>
-                        <p class="font-bold text-gray-700">🏠 จุดส่ง (ที่อยู่ของคุณ)</p>
-                        <p class="text-gray-600">${order.address || '-'}</p>
+                    <div class="text-left bg-white bg-opacity-70 rounded-lg p-3 mb-2 text-sm space-y-3">
+                        <div>
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <p class="font-bold text-gray-700">1️⃣ จุดรับอาหาร (ต้นทาง)</p>
+                                <button type="button" onclick="copyFromEl('rider-pickup-${sid}')" class="flex-shrink-0 whitespace-nowrap text-xs font-bold bg-white border border-gray-300 rounded-full px-3 py-1.5 shadow-sm">📋 คัดลอก</button>
+                            </div>
+                            <p id="rider-pickup-${sid}" class="text-gray-600 select-all break-words whitespace-pre-line">กำลังโหลด...</p>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <p class="font-bold text-gray-700">2️⃣ จุดส่ง (ที่อยู่ของคุณ)</p>
+                                <button type="button" onclick="copyFromEl('rider-dropoff-${sid}')" class="flex-shrink-0 whitespace-nowrap text-xs font-bold bg-white border border-gray-300 rounded-full px-3 py-1.5 shadow-sm">📋 คัดลอก</button>
+                            </div>
+                            <p id="rider-dropoff-${sid}" class="text-gray-600 select-all break-words whitespace-pre-line">${escapeHtml(order.address || '-')}</p>
+                        </div>
                     </div>
-                    <p class="text-xs text-gray-500 mb-2">*กดเปิดแอปแล้วกรอกจุดรับ-ส่งด้านบนเองในแอปได้เลยค่ะ</p>
+                    <p class="text-xs text-gray-500 mb-2">*กดคัดลอก → เปิดแอป → วางในช่องจุดรับ/จุดส่งได้เลยค่ะ</p>
                     <div class="space-y-2">
-                        <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งด่วนหรือส่งพัสดุ)</a>
-                        <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700">เรียก Bolt (เลือกส่งหรือรับพัสดุ)</a>
+                        <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งด่วน)</a>
+                        <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700">เรียก Bolt ส่งพัสดุ</a>
                     </div>
                    </div>`
                 : '';
@@ -690,6 +700,73 @@
                     if (target) target.innerText = pickupAddressCache;
                 })
                 .catch(() => { /* ถ้าดึงที่อยู่จุดรับไม่สำเร็จ ปล่อยเป็น "กำลังโหลด..." ไว้ ไม่บล็อกการแสดงผล */ });
+        }
+
+        // ที่อยู่ลูกค้าพิมพ์อะไรมาก็ได้ ต้อง escape ก่อนแทรกเป็น HTML กัน script/แท็กแปลกๆ ไปรันในหน้า
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.innerText = text || '';
+            return div.innerHTML;
+        }
+
+        // คัดลอกที่อยู่จุดรับ/จุดส่งไปวางในแอป Grab/Bolt - อ่านจาก element แทนการใส่ที่อยู่ลงใน onclick ตรงๆ
+        // (ที่อยู่มีเครื่องหมายคำพูด/ขึ้นบรรทัดได้) ลอง Clipboard API ก่อน ถ้า webview ของ LINE บางรุ่นไม่ยอม
+        // ค่อยใช้ execCommand แบบเก่า ถ้ายังไม่ได้อีกก็เลือกข้อความไว้ให้ลูกค้ากดค้างคัดลอกเอง
+        function copyFromEl(id) {
+            const el = document.getElementById(id);
+            const text = el ? el.innerText.trim() : '';
+            if (!text || text === '-' || text === 'กำลังโหลด...') {
+                showToast('ที่อยู่ยังโหลดไม่เสร็จ รอสักครู่นะคะ');
+                return;
+            }
+            const done = () => showToast('✅ คัดลอกแล้วค่ะ');
+            const fallback = () => {
+                if (legacyCopy(text)) { done(); return; }
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                showToast('กดค้างที่ข้อความที่เลือกไว้ แล้วกด "คัดลอก" ได้เลยค่ะ');
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(done).catch(fallback);
+            } else {
+                fallback();
+            }
+        }
+
+        function legacyCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            ta.setSelectionRange(0, text.length); // iOS ต้องกำหนดช่วงเองถึงจะเลือกได้
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            document.body.removeChild(ta);
+            return ok;
+        }
+
+        // ป้ายแจ้งลอยด้านล่าง หายเองใน 2 วิ - ใช้แทนการเปลี่ยนข้อความบนปุ่ม เพราะการ์ดถูก re-render ทุกรอบโพล
+        let toastTimer = null;
+        function showToast(message) {
+            let toast = document.getElementById('copy-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'copy-toast';
+                toast.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;max-width:90vw;'
+                    + 'background:rgba(17,24,39,0.92);color:#fff;padding:10px 18px;border-radius:9999px;font-size:14px;font-weight:600;text-align:center;';
+                document.body.appendChild(toast);
+            }
+            toast.innerText = message;
+            toast.style.display = 'block';
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 2000);
         }
 
         function confirmReceived(type, orderId) {
