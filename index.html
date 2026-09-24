@@ -131,10 +131,10 @@
 
         <!-- สลับโหมด: อาหาร (ตามวัน/เวลาที่แอดมินตั้งไว้) / สินค้าแห้ง (ทุกวัน 24 ชม.) -->
         <div id="tabs" class="flex gap-2 mb-4">
-            <button id="tab-btn-food" onclick="switchTab('food')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
+            <button id="tab-btn-food" onclick="userPickedTab = true; switchTab('food')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
                 🍲 Yateem Kitchen<br><span id="food-tab-subtext" class="text-sm font-normal">กำลังโหลด...</span>
             </button>
-            <button id="tab-btn-nw" onclick="switchTab('nw')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
+            <button id="tab-btn-nw" onclick="userPickedTab = true; switchTab('nw')" class="flex-1 py-3 rounded-lg font-bold text-sm shadow">
                 📦 สั่งซื้อสินค้าจากยาตีมทีวี<br><span class="text-sm font-normal">ส่งทั่วประเทศ • เปิดตลอด 24 ชม.</span>
             </button>
         </div>
@@ -496,6 +496,7 @@
         let profile = {};
         let bkkVerification = {};
         let pendingResume = null; // { type, cart } กู้คืนหลัง redirect กลับจาก LINE login
+        let userPickedTab = false; // ลูกค้ากดเลือกแท็บเองแล้ว - ห้ามสลับแท็บให้อัตโนมัติทับ
         let foodSettings = null; // { areaTimeNote, orderDay, startHour, endHour, areaKeywords, pickupAddress } - ตั้งค่าได้จากหน้า Admin
         let nwPaymentSettings = null; // { codShippingFee, bankAccountName, bankName, bankAccountNumber } - ตั้งค่าได้จากหน้า Admin
         const DAY_NAMES_TH = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
@@ -654,8 +655,9 @@
             // โหลดรีวิวรอไว้เบื้องหลัง - กดดูรีวิวแล้วขึ้นทันที
             setTimeout(() => { loadFirebaseReviews().catch(() => {}); }, 1500);
 
-            // สลับไปแท็บอาหารช่วงเปิดขาย - ทำครั้งแรกครั้งเดียว ไม่สลับแท็บทับตอนอัปเดตเบื้องหลัง
-            if (!pendingResume && !isRefresh) {
+            // สลับไปแท็บอาหารช่วงเปิดขาย | ตอนอัปเดตเบื้องหลังก็สลับได้ถ้าลูกค้ายังไม่ได้กดเลือกแท็บเอง/ไม่ได้กรอกฟอร์มอยู่
+            // (ค่าตั้งค่าในเครื่องอาจเป็นวันเปิดขายเก่า เช่นแอดมินเปลี่ยนวัน - ข้อมูลสดต้องแก้ค่าเริ่มต้นให้ถูกได้)
+            if (!pendingResume && (!isRefresh || (!userPickedTab && !isCheckoutOpen('nw') && document.getElementById('panel-food').classList.contains('hidden')))) {
                 const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
                 if (isFoodOpenHours() || isTestMode) switchTab('food');
             }
