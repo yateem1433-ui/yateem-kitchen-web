@@ -207,7 +207,11 @@
 
         let currentUserId = null;
         let pollTimer = null;
+        // ที่อยู่จุดรับอาหารแทบไม่เคยเปลี่ยน - จำไว้ในเครื่อง เปิดหน้าครั้งถัดไปโชว์ได้ทันทีไม่ต้องรอ Apps Script
+        const PICKUP_STORAGE_KEY = 'yateemPickupAddress';
         let pickupAddressCache = null;
+        try { pickupAddressCache = localStorage.getItem(PICKUP_STORAGE_KEY) || null; } catch (e) {}
+        let pickupAddressPromise = null;
         let currentOrderTab = 'active';
         const ordersById = {}; // orderId -> ข้อมูลออเดอร์ล่าสุด (ใช้ตอนเปิดโมดัลเคลม/รีวิว)
 
@@ -555,7 +559,7 @@
             activeOrders.forEach((order) => {
                 activeContainer.insertAdjacentHTML('beforeend', buildOrderCard(order, false));
                 if (order.lightStatus === 'green' && order.type === 'food') {
-                    fillRiderAddresses(order);
+                    ensurePickupAddress();
                 }
             });
 
@@ -623,7 +627,7 @@
                                 <p class="font-bold text-gray-700">1️⃣ จุดรับอาหาร (ต้นทาง)</p>
                                 <button type="button" onclick="copyFromEl('rider-pickup-${sid}')" class="flex-shrink-0 whitespace-nowrap text-xs font-bold bg-white border border-gray-300 rounded-full px-3 py-1.5 shadow-sm">📋 คัดลอก</button>
                             </div>
-                            <p id="rider-pickup-${sid}" class="text-gray-600 select-all break-words whitespace-pre-line">กำลังโหลด...</p>
+                            <p id="rider-pickup-${sid}" data-pickup-address class="text-gray-600 select-all break-words whitespace-pre-line">${pickupAddressCache ? escapeHtml(pickupAddressCache) : 'กำลังโหลด...'}</p>
                         </div>
                         <div>
                             <div class="flex items-center justify-between gap-2 mb-1">
@@ -691,20 +695,18 @@
             `;
         }
 
-        function fillRiderAddresses(order) {
-            const sid = safeId(order.orderId);
-            const target = document.getElementById('rider-pickup-' + sid);
-            if (!target) return;
-            if (pickupAddressCache) {
-                target.innerText = pickupAddressCache;
-                return;
-            }
-            callApi('getFoodSettings')
+        // ดึงที่อยู่จุดรับครั้งเดียวต่อการเปิดหน้า (ใช้ promise ร่วมกัน) - เดิมยิงแยกต่อการ์ด และการ์ดที่ render
+        // จาก cache แล้วถูก render ใหม่ตอน getMyOrders ตอบ จะยิงซ้ำ + ผลรอบแรกไปเขียนใส่ element เก่าที่ถูกลบแล้ว
+        // ตอนได้ผลจึงอัปเดตทุกช่องจุดรับที่อยู่ในหน้า "ณ ตอนนั้น" แทนการจำ element ไว้
+        function ensurePickupAddress() {
+            if (pickupAddressPromise) return;
+            pickupAddressPromise = callApi('getFoodSettings')
                 .then((settings) => {
-                    pickupAddressCache = settings.pickupAddress || '-';
-                    if (target) target.innerText = pickupAddressCache;
+                    pickupAddressCache = (settings && settings.pickupAddress) || '-';
+                    try { localStorage.setItem(PICKUP_STORAGE_KEY, pickupAddressCache); } catch (e) {}
+                    document.querySelectorAll('[data-pickup-address]').forEach((el) => { el.innerText = pickupAddressCache; });
                 })
-                .catch(() => { /* ถ้าดึงที่อยู่จุดรับไม่สำเร็จ ปล่อยเป็น "กำลังโหลด..." ไว้ ไม่บล็อกการแสดงผล */ });
+                .catch(() => { pickupAddressPromise = null; /* พลาด - ปล่อยค่าเดิม/"กำลังโหลด..." ไว้ แล้วลองใหม่รอบ render ถัดไป */ });
         }
 
         // ที่อยู่ลูกค้าพิมพ์อะไรมาก็ได้ ต้อง escape ก่อนแทรกเป็น HTML กัน script/แท็กแปลกๆ ไปรันในหน้า
