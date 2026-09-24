@@ -655,12 +655,20 @@
             // โหลดรีวิวรอไว้เบื้องหลัง - กดดูรีวิวแล้วขึ้นทันที
             setTimeout(() => { loadFirebaseReviews().catch(() => {}); }, 1500);
 
-            // สลับไปแท็บอาหารช่วงเปิดขาย | ตอนอัปเดตเบื้องหลังก็สลับได้ถ้าลูกค้ายังไม่ได้กดเลือกแท็บเอง/ไม่ได้กรอกฟอร์มอยู่
-            // (ค่าตั้งค่าในเครื่องอาจเป็นวันเปิดขายเก่า เช่นแอดมินเปลี่ยนวัน - ข้อมูลสดต้องแก้ค่าเริ่มต้นให้ถูกได้)
-            if (!pendingResume && (!isRefresh || (!userPickedTab && !isCheckoutOpen('nw') && document.getElementById('panel-food').classList.contains('hidden')))) {
-                const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
-                if (isFoodOpenHours() || isTestMode) switchTab('food');
-            }
+            // ตอนอัปเดตเบื้องหลังก็ต้องเรียกด้วย - ค่าตั้งค่าในเครื่องอาจเป็นวันเปิดขายเก่า (เช่นแอดมินเปลี่ยนวัน) ข้อมูลสดต้องแก้ค่าเริ่มต้นให้ถูกได้
+            applyDefaultTab();
+        }
+
+        // แท็บค่าเริ่มต้น: ช่วงวัน/เวลาเปิดขาย = Yateem Kitchen | นอกเวลา = สินค้ายาตีมทีวี
+        // ไม่สลับทับถ้าลูกค้ากดเลือกแท็บเองแล้ว / กำลังกรอกฟอร์มสั่งซื้อ / มีของในตะกร้าอาหาร (กันโดนดึงออกกลางทาง)
+        function applyDefaultTab() {
+            if (pendingResume || userPickedTab) return;
+            const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
+            const want = (isFoodOpenHours() || isTestMode) ? 'food' : 'nw';
+            const current = document.getElementById('panel-food').classList.contains('hidden') ? 'nw' : 'food';
+            if (want === current || isCheckoutOpen(current)) return;
+            if (Number(document.getElementById('cart-count-food').innerText) > 0) return;
+            switchTab(want);
         }
 
         function loadBootstrapFallback() {
@@ -682,11 +690,7 @@
                     foodSettings = settings;
                     applyFoodSettingsToUI(settings);
                     loadFoodMenu();
-
-                    if (!pendingResume) {
-                        const isTestMode = new URLSearchParams(window.location.search).get('test') === '1';
-                        if (isFoodOpenHours() || isTestMode) switchTab('food');
-                    }
+                    applyDefaultTab();
                 })
                 .catch(() => {
                     // โหลดค่าตั้งค่าไม่สำเร็จ ใช้ค่า default ฝั่งนี้แทนไม่ให้หน้าเว็บพัง
@@ -711,11 +715,12 @@
             else if (foodSettings) subtext.innerText = foodSettings.areaTimeNote;
         }
 
-        // เปิดหน้าค้างไว้แล้วถึงเวลาเปิด/ปิดขาย ให้ปุ่มและแบนเนอร์พรีออเดอร์อัปเดตเอง (ไม่สลับแท็บให้ กันแท็บเด้งหนีตอนลูกค้ากำลังเลือกของ)
+        // เปิดหน้าค้างไว้แล้วถึงเวลาเปิด/ปิดขาย ให้ปุ่ม แบนเนอร์พรีออเดอร์ และแท็บค่าเริ่มต้นอัปเดตเอง
         setInterval(() => {
             if (!foodSettings) return;
             updateFoodTabHighlight();
             updateFoodPreorderNote();
+            applyDefaultTab();
         }, 60000);
 
         // เช็กว่าตอนนี้อยู่ในช่วงเวลาเปิดขายจริง (วัน/เวลาที่แอดมินตั้งไว้) หรือไม่
