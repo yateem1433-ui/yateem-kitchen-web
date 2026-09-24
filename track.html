@@ -634,9 +634,14 @@
                         </div>
                     </div>
                     <p class="text-xs text-gray-500 mb-2">*กดคัดลอก → เปิดแอป → วางในช่องจุดรับ/จุดส่งได้เลยค่ะ</p>
+                    <!-- grab://open?screenType=EXPRESS ทดสอบบน Android ใน LINE แล้วเข้าหน้า GrabExpress ได้ตรงๆ (screen=EXPRESS แบบเดิมลงหน้าแรก)
+                         Bolt ลองมาหลายลิงก์แล้วลงหน้าแรกทุกตัว ในแอปต้องเลือก "ส่ง/รับ" เอง จึงใช้คำแนะนำใต้ปุ่มแทน ไม่ต้องเดาลิงก์ใหม่ -->
                     <div class="space-y-2">
-                        <a href="grab://open?screen=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งด่วน)</a>
-                        <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700">เรียก Bolt ส่งพัสดุ</a>
+                        <a href="grab://open?screenType=EXPRESS" target="_blank" class="block w-full text-center bg-green-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-green-700">เรียก GrabExpress (ส่งด่วน)</a>
+                        <div>
+                            <a href="bolt://" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700">เรียก Bolt ส่งพัสดุ</a>
+                            <p class="text-xs text-gray-500 mt-1 text-center">*เข้าแอป Bolt แล้วกด "ส่งพัสดุ" → เลือก "ส่ง" ค่ะ</p>
+                        </div>
                     </div>
                    </div>`
                 : '';
