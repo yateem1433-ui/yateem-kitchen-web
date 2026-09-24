@@ -90,6 +90,10 @@
         .promo-badge-pulse{ animation: promoPulse 1.8s ease-in-out infinite; }
         .promo-price-glow{ box-shadow:0 3px 12px rgba(220,38,38,0.45); }
 
+        /* ปุ่มแท็บ Yateem Kitchen ช่วงวัน/เวลาเปิดขาย: ขอบทอง + เรืองแสงเป็นจังหวะ ให้ลูกค้าเห็นทันทีว่าครัวเปิดแล้ว */
+        @keyframes foodOpenGlow { 0%,100%{ box-shadow:0 0 0 0 rgba(234,185,52,0.8), 0 4px 14px rgba(234,185,52,0.45); } 50%{ box-shadow:0 0 0 7px rgba(234,185,52,0), 0 4px 20px rgba(234,185,52,0.7); } }
+        .food-open-glow{ outline:2px solid #EAB934; outline-offset:0; transform:scale(1.02); animation: foodOpenGlow 1.6s ease-in-out infinite; }
+
         /* ชื่อเมนู/ข้อความโปรฯ ในการ์ด: ยอมตัดบรรทัดภาษาไทยได้ (keep-all ทำให้ชื่อยาวๆ ไม่ขึ้นบรรทัดใหม่ ดันการ์ดล้นจอ)
            overflow-wrap:anywhere ลดความกว้างขั้นต่ำของข้อความได้จริง ต่างจาก break-word ที่ไม่ช่วยตอนอยู่ใน flex */
         .menu-text{ word-break: normal; overflow-wrap: anywhere; }
@@ -692,7 +696,25 @@
 
         function applyFoodSettingsToUI(settings) {
             document.getElementById('food-tab-subtext').innerText = settings.areaTimeNote;
+            updateFoodTabHighlight();
         }
+
+        // ช่วงวัน/เวลาเปิดขาย: ปุ่มแท็บ Yateem Kitchen เรืองแสงทอง + ข้อความบอกว่าเปิดขายแล้ว | นอกเวลากลับเป็นปุ่มปกติ
+        function updateFoodTabHighlight() {
+            const btn = document.getElementById('tab-btn-food');
+            const subtext = document.getElementById('food-tab-subtext');
+            const open = isFoodOpenHours();
+            btn.classList.toggle('food-open-glow', open);
+            if (open) subtext.innerText = '🔥 เปิดขายแล้ว! สั่งได้เลยค่ะ';
+            else if (foodSettings) subtext.innerText = foodSettings.areaTimeNote;
+        }
+
+        // เปิดหน้าค้างไว้แล้วถึงเวลาเปิด/ปิดขาย ให้ปุ่มและแบนเนอร์พรีออเดอร์อัปเดตเอง (ไม่สลับแท็บให้ กันแท็บเด้งหนีตอนลูกค้ากำลังเลือกของ)
+        setInterval(() => {
+            if (!foodSettings) return;
+            updateFoodTabHighlight();
+            updateFoodPreorderNote();
+        }, 60000);
 
         // เช็กว่าตอนนี้อยู่ในช่วงเวลาเปิดขายจริง (วัน/เวลาที่แอดมินตั้งไว้) หรือไม่
         function isFoodOpenHours() {
@@ -755,7 +777,8 @@
         }
 
         function switchTab(tab) {
-            document.getElementById('tab-btn-food').classList.toggle('bg-green-600', tab === 'food');
+            // น้ำเงิน = แท็บที่เลือกอยู่ (เหมือนกันทั้งสองปุ่ม)
+            document.getElementById('tab-btn-food').classList.toggle('bg-blue-600', tab === 'food');
             document.getElementById('tab-btn-food').classList.toggle('text-white', tab === 'food');
             document.getElementById('tab-btn-food').classList.toggle('bg-gray-200', tab !== 'food');
             document.getElementById('tab-btn-food').classList.toggle('text-gray-700', tab !== 'food');
