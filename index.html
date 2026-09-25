@@ -99,6 +99,10 @@
         .menu-text{ word-break: normal; overflow-wrap: anywhere; }
         /* ตาข่ายกันพลาด: ถ้ามีอะไรล้นในอนาคต ห้ามดันทั้งหน้าให้เลื่อนขวาได้ (clip ไม่ทำให้ sticky header พังแบบ hidden) */
         html, body{ max-width:100%; overflow-x: clip; }
+        /* รายละเอียดสินค้าใต้ชื่อ: โชว์ 2 บรรทัดแรก กด "แสดงเพิ่มเติม" เพื่อกางทั้งหมด (คงการขึ้นบรรทัดที่แอดมินพิมพ์ไว้) */
+        .menu-desc{ white-space: pre-line; line-height: 1.5; overflow-wrap: anywhere;
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+        .menu-desc.open{ display: block; -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -872,6 +876,11 @@
                     const ratingHtml = item.ratingCount > 0
                         ? `<button type="button" onclick="openReviewsModal('${item.id}', '${safeName}')" class="text-xs text-yellow-600 font-bold underline decoration-dotted">★ ${item.rating} (${item.ratingCount} รีวิว)</button>`
                         : '';
+                    // รายละเอียดสินค้า (แอดมินพิมพ์ในหน้าแอดมิน) - escape ก่อนแทรก, ปุ่มกางจะโชว์เฉพาะที่ยาวเกิน 2 บรรทัด (ดู fitMenuDescriptions)
+                    const descHtml = item.description
+                        ? `<p class="menu-desc text-xs sm:text-sm text-gray-600 mt-1">${escapeHtml(item.description)}</p>
+                           <button type="button" onclick="toggleMenuDesc(this)" class="menu-desc-toggle hidden text-xs font-bold text-gray-500 mt-0.5">แสดงเพิ่มเติม ˅</button>`
+                        : '';
                     const itemHtml = `
                         <div data-category="${item.category || ''}" class="flex bg-white p-3 sm:p-4 rounded-lg shadow items-start gap-3 sm:gap-4">
                             <div class="relative flex-shrink-0">
@@ -883,6 +892,7 @@
                             <div class="flex-1 min-w-0">
                                 <h3 class="menu-text font-semibold text-base sm:text-lg leading-snug text-gray-800">${item.name}</h3>
                                 ${ratingHtml}
+                                ${descHtml}
                                 <div id="price-block-${type}-${item.id}">${renderPriceBlock(type, item, opts.priceColor)}</div>
                                 <!-- ปุ่ม +/- อยู่ใต้ราคา ชิดขวา (เดิมอยู่แถวเดียวกับรูป+ชื่อ ทำให้จอมือถือเหลือที่ให้ชื่อแค่นิดเดียว) -->
                                 <div class="flex justify-end mt-2">
@@ -899,8 +909,28 @@
                 });
             }
 
+            fitMenuDescriptions(container);
             applyCartToUI(type); // คืนจำนวนที่พักไว้ในตะกร้า (localStorage) กลับมาแสดงบนการ์ด + คิดยอดรวม
             maybeResumeCheckout(type);
+        }
+
+        // โชว์ปุ่ม "แสดงเพิ่มเติม" เฉพาะรายละเอียดที่ถูกตัดจริง (ยาวเกิน 2 บรรทัด)
+        // ถ้าแท็บยังซ่อนอยู่ (วัดความสูงไม่ได้ = 0) ใช้การเดาจากความยาว/การขึ้นบรรทัดแทน
+        function fitMenuDescriptions(container) {
+            container.querySelectorAll('.menu-desc').forEach((p) => {
+                const btn = p.nextElementSibling;
+                if (!btn || !btn.classList.contains('menu-desc-toggle') || p.classList.contains('open')) return;
+                const clipped = p.clientHeight > 0
+                    ? p.scrollHeight > p.clientHeight + 1
+                    : (p.textContent.length > 60 || p.querySelector('br') !== null || /\n/.test(p.textContent));
+                btn.classList.toggle('hidden', !clipped);
+            });
+        }
+
+        function toggleMenuDesc(btn) {
+            const p = btn.previousElementSibling;
+            const open = p.classList.toggle('open');
+            btn.innerText = open ? 'แสดงน้อยลง ˄' : 'แสดงเพิ่มเติม ˅';
         }
 
         // คืนสภาพตะกร้าที่เก็บไว้กลับมาบน UI หลัง render เมนูเสร็จ (จำนวน + กล่องราคาโปรฯ + ยอดรวม)
