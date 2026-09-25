@@ -253,6 +253,7 @@
                 <p class="text-5xl mb-3">🙏</p>
                 <h2 class="pay-red text-xl font-bold text-green-700 mb-2">สั่งซื้อสำเร็จ!</h2>
                 <p id="food-rider-order-id" class="text-sm text-gray-500 mb-4"></p>
+                <p id="food-rider-delivery" class="hidden mb-4 p-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-sm font-bold"></p>
                 <p class="text-gray-600 leading-relaxed mb-6">กรุณารอแอดมินจัดเตรียมออเดอร์สักครู่นะคะ 🙏<br>เมื่อพร้อมจัดส่งแล้ว จะมีปุ่มเรียกรถขึ้นในหน้าติดตามออเดอร์ให้เลยค่ะ</p>
                 <a href="track.html" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📦 ไปหน้าติดตามออเดอร์</a>
                 <button onclick="closePage()" class="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">ปิดหน้าต่าง</button>
@@ -601,7 +602,8 @@
         // แทนที่จะยิง 4 request แยกกันเหมือนเดิม (2 ใน 4 ต่อคิวกันโดยไม่จำเป็น) - เดิมแต่ละ request คือ
         // การวิ่งไปเปิด Google Sheets 1 รอบ ยิ่งเยอะยิ่งช้าและเสี่ยง "Failed to fetch" ตอน backend คิวแน่น
         // เมนูที่โหลดสำเร็จล่าสุดเก็บไว้ในเครื่อง - เปิดหน้าครั้งถัดไปโชว์ได้ทันที (ไม่ต้องรอหลังบ้าน)
-        // แล้วค่อยอัปเดตเป็นข้อมูลล่าสุดเบื้องหลัง (stale-while-revalidate) - ราคา/สต็อกจริงหลังบ้านเช็กซ้ำตอนส่งออเดอร์อยู่แล้ว
+        // แล้วค่อยอัปเดตเป็นข้อมูลล่าสุดเบื้องหลัง (stale-while-revalidate) - สต็อกจริงหลังบ้านเช็กซ้ำใน lock ตอนส่งออเดอร์
+        // (ราคาหลังบ้านแค่เทียบแล้วแจ้งเตือนแอดมินในคอลัมน์ PriceCheck ไม่ได้ปฏิเสธออเดอร์)
         const BOOTSTRAP_STORAGE_KEY = 'yateemBootstrap_v1';
         const BOOTSTRAP_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
         let lastBootstrapJson = null;
@@ -675,7 +677,7 @@
             nwPaymentSettings = data.nwPaymentSettings || { codShippingFee: 50, bankAccountName: '-', bankName: '-', bankAccountNumber: '-' };
             applyNwPaymentSettingsToUI(nwPaymentSettings);
 
-            foodSettings = data.foodSettings || { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'] };
+            foodSettings = data.foodSettings || { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'], cutoffDay: 4, cutoffTime: '18:00', deliveryDay: 5, deliveryTime: '11:00-14:00' };
             applyFoodSettingsToUI(foodSettings);
 
             if (data.nwMenu) {
@@ -733,7 +735,7 @@
                 })
                 .catch(() => {
                     // โหลดค่าตั้งค่าไม่สำเร็จ ใช้ค่า default ฝั่งนี้แทนไม่ให้หน้าเว็บพัง
-                    foodSettings = { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'] };
+                    foodSettings = { areaTimeNote: 'ส่งกรุงเทพและปริมณฑล เฉพาะวันศุกร์ 11:00-14:00 น.', orderDay: 5, startHour: 11, endHour: 14, areaKeywords: ['กรุงเทพ', 'กทม'], cutoffDay: 4, cutoffTime: '18:00', deliveryDay: 5, deliveryTime: '11:00-14:00' };
                     applyFoodSettingsToUI(foodSettings);
                     loadFoodMenu();
                 });
@@ -750,7 +752,10 @@
             const subtext = document.getElementById('food-tab-subtext');
             const open = isFoodOpenHours();
             btn.classList.toggle('food-open-glow', open);
-            if (open) subtext.innerText = '🔥 เปิดขายแล้ว! สั่งได้เลยค่ะ';
+            const round = foodRoundInfo(foodSettings, new Date());
+            if (open) subtext.innerText = (round && round.closedRound)
+                ? '🛵 วันนี้จัดส่งค่ะ · สั่งตอนนี้ได้รับรอบถัดไป'
+                : '🔥 เปิดขายแล้ว! สั่งได้เลยค่ะ';
             else if (foodSettings) subtext.innerText = foodSettings.areaTimeNote;
         }
 
@@ -774,12 +779,71 @@
         // เรียงตามลำดับที่สั่งเข้ามา รอจนกว่าจะถึงรอบเปิดขายจริงแล้วแอดมินจะทยอยดำเนินการตามคิว
         function updateFoodPreorderNote() {
             const note = document.getElementById('food-preorder-note');
+            // รอบสั่งล่วงหน้าแบบใหม่ (แอดมินตั้งวัน/เวลาปิดรับ + วันจัดส่ง) - แสดงตลอด ไม่ซ่อนช่วงเวลาเปิดขาย
+            const round = foodRoundInfo(foodSettings, new Date());
+            if (round) {
+                note.classList.remove('hidden');
+                note.innerHTML = foodRoundNoteHtml(round);
+                return;
+            }
+            // หลังบ้านรุ่นเก่า (ยังไม่มีคีย์รอบสั่งล่วงหน้า) - ข้อความเดิม
             if (isFoodOpenHours() || !foodSettings) {
                 note.classList.add('hidden');
                 return;
             }
             note.classList.remove('hidden');
             note.innerHTML = '📌 ตอนนี้อยู่นอกเวลาเปิดขาย <span class="preorder-day font-bold">(เปิดขายเฉพาะวัน' + DAY_NAMES_TH[foodSettings.orderDay] + ' เวลา ' + foodSettings.startHour + ':00 - ' + foodSettings.endHour + ':00 น.)</span> แต่สั่งล่วงหน้าได้เลยค่ะ ออเดอร์จะเข้าคิวรอจัดส่งในรอบเปิดขายถัดไปให้อัตโนมัติ';
+        }
+
+        // ---------------- รอบสั่งล่วงหน้า ----------------
+        // "เปิดขายและสั่งอาหารล่วงหน้าถึงวัน<cutoffDay> เวลา <cutoffTime> จัดส่งวัน<deliveryDay>"
+        // คืน null ถ้าหลังบ้านยังไม่มีคีย์เหล่านี้ | เวลาใช้นาฬิกาเครื่องลูกค้า (ลูกค้าอยู่ไทย)
+        //   cutoffAt     = เวลาปิดรับของรอบที่ยังรับออเดอร์อยู่ (ครั้งถัดไปที่ยังไม่ถึง)
+        //   deliveryDate = วันจัดส่งของรอบนั้น (วันจัดส่งแรกนับจากวันปิดรับ)
+        //   closedRound  = รอบก่อนหน้าที่ปิดรับไปแล้วแต่ยังไม่จบวันจัดส่ง (null = ไม่มี)
+        function foodRoundInfo(fs, now) {
+            if (!fs || fs.cutoffDay === undefined || fs.cutoffDay === null || fs.deliveryDay === undefined) return null;
+            const hm = String(fs.cutoffTime || '18:00').split(':');
+            const cutoffAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(hm[0]) || 0, Number(hm[1]) || 0, 0, 0);
+            cutoffAt.setDate(cutoffAt.getDate() + ((Number(fs.cutoffDay) - now.getDay() + 7) % 7));
+            if (cutoffAt < now) cutoffAt.setDate(cutoffAt.getDate() + 7);
+            const deliveryOf = (cut) => {
+                const d = new Date(cut.getFullYear(), cut.getMonth(), cut.getDate());
+                d.setDate(d.getDate() + ((Number(fs.deliveryDay) - d.getDay() + 7) % 7));
+                return d;
+            };
+            const prevCutoff = new Date(cutoffAt.getTime());
+            prevCutoff.setDate(prevCutoff.getDate() - 7);
+            const prevDelivery = deliveryOf(prevCutoff);
+            const prevDeliveryEnd = new Date(prevDelivery.getFullYear(), prevDelivery.getMonth(), prevDelivery.getDate() + 1);
+            return {
+                cutoffAt: cutoffAt,
+                deliveryDate: deliveryOf(cutoffAt),
+                closedRound: now < prevDeliveryEnd ? { deliveryDate: prevDelivery } : null,
+                cutoffTime: String(fs.cutoffTime || '18:00'),
+                deliveryTime: String(fs.deliveryTime || '')
+            };
+        }
+
+        function fmtDayMonth(d) {
+            return d.getDate() + '/' + (d.getMonth() + 1);
+        }
+
+        // "วันศุกร์ที่ 3/10 เวลา 11:00-14:00 น."
+        function fmtDelivery(round, date) {
+            return 'วัน' + DAY_NAMES_TH[date.getDay()] + 'ที่ ' + fmtDayMonth(date)
+                + (round.deliveryTime ? ' เวลา ' + escapeHtml(round.deliveryTime) + ' น.' : '');
+        }
+
+        function foodRoundNoteHtml(round) {
+            const cutoffText = 'วัน' + DAY_NAMES_TH[round.cutoffAt.getDay()] + ' เวลา ' + escapeHtml(round.cutoffTime) + ' น.';
+            if (!round.closedRound) {
+                return '📌 เปิดขายและสั่งอาหารล่วงหน้าถึง<span class="preorder-day font-bold">' + cutoffText + '</span>'
+                    + ' จัดส่ง<span class="preorder-day font-bold">' + fmtDelivery(round, round.deliveryDate) + '</span> ค่ะ';
+            }
+            return '📌 รอบจัดส่ง' + fmtDelivery(round, round.closedRound.deliveryDate) + ' ปิดรับออเดอร์แล้วค่ะ<br>'
+                + 'สั่งตอนนี้ได้เลย ออเดอร์จะจัดส่งรอบถัดไป <span class="preorder-day font-bold">' + fmtDelivery(round, round.deliveryDate) + '</span>'
+                + ' (สั่งได้ถึง' + cutoffText + ')';
         }
 
         function applyNwPaymentSettingsToUI(settings) {
@@ -918,12 +982,21 @@
                         ? `<p class="menu-desc text-xs sm:text-sm text-gray-600 mt-1 cursor-pointer" ${openAttr}>${escapeHtml(item.description)}</p>
                            <button type="button" ${openAttr} class="menu-desc-toggle hidden text-xs font-bold text-blue-600 mt-0.5">ดูรายละเอียด ›</button>`
                         : '';
+                    // สต็อก: 0 = หมด (การ์ดจาง + ปุ่ม + กดไม่ได้) / เหลือ ≤ 10 = ป้าย "เหลือ N"
+                    const stock = stockLeft(item);
+                    const soldOut = stock === 0;
+                    const stockBadge = soldOut
+                        ? '<span class="absolute inset-x-0 bottom-1 mx-auto w-fit bg-gray-900/85 text-white text-[10px] leading-none font-extrabold px-2 py-1 rounded">หมดแล้ว</span>'
+                        : (stock !== null && stock <= 10
+                            ? `<span class="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">เหลือ ${stock}</span>`
+                            : '');
                     const itemHtml = `
-                        <div data-category="${item.category || ''}" class="flex bg-white p-3 sm:p-4 rounded-lg shadow items-start gap-3 sm:gap-4">
+                        <div data-category="${item.category || ''}" class="flex bg-white p-3 sm:p-4 rounded-lg shadow items-start gap-3 sm:gap-4${soldOut ? ' opacity-60' : ''}">
                             <div class="relative flex-shrink-0">
                                 <img src="${item.imageUrl || PLACEHOLDER_IMG}" alt="${item.name}" width="96" height="96" loading="lazy" decoding="async" class="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover cursor-pointer" ${openAttr}>
                                 ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
                                 ${item.promo ? '<span class="absolute -bottom-1 -right-1 text-white text-[8px] leading-none font-extrabold px-1.5 py-[3px] rounded shadow-md whitespace-nowrap promo-badge-pulse" style="background:linear-gradient(90deg,#DC2626,#EAB934);">🎉 โปรฯ</span>' : ''}
+                                ${stockBadge}
                             </div>
                             <!-- min-w-0 = ยอมให้คอลัมน์ข้อความหดตามจอ ชื่อยาวจะขึ้นบรรทัดใหม่แทนการดันการ์ดล้นขอบ -->
                             <div class="flex-1 min-w-0">
@@ -936,7 +1009,7 @@
                                     <div class="flex-shrink-0 flex items-center gap-3 border border-gray-200 rounded-full p-1.5 bg-gray-50">
                                         <button onclick="updateCart('${type}', '${item.id}', -1)" class="w-8 h-8 rounded-full bg-white font-bold text-lg shadow">-</button>
                                         <span id="qty-${type}-${item.id}" class="font-bold text-lg w-7 text-center">0</span>
-                                        <button onclick="updateCart('${type}', '${item.id}', 1)" class="w-8 h-8 rounded-full ${opts.addBtnColor} text-white font-bold text-lg shadow">+</button>
+                                        <button onclick="updateCart('${type}', '${item.id}', 1)" ${soldOut ? 'disabled' : ''} class="w-8 h-8 rounded-full ${soldOut ? 'bg-gray-300' : opts.addBtnColor} text-white font-bold text-lg shadow">+</button>
                                     </div>
                                 </div>
                             </div>
@@ -1024,6 +1097,19 @@
         function applyCartToUI(type) {
             const s = state[type];
             const priceColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
+            // ตะกร้าที่พักไว้ในเครื่องอาจมีจำนวนเกินสต็อกล่าสุด (มีคนซื้อไปก่อน) - ปรับลดให้ แล้วบอกลูกค้า
+            let trimmed = false;
+            s.menuData.forEach(item => {
+                const limit = stockLeft(item);
+                if (limit !== null && (s.cart[item.id] || 0) > limit) {
+                    if (limit > 0) s.cart[item.id] = limit; else delete s.cart[item.id];
+                    trimmed = true;
+                }
+            });
+            if (trimmed) {
+                saveCarts();
+                showCartNotice('มีสินค้าบางรายการเหลือน้อยลง ปรับจำนวนในตะกร้าให้แล้วค่ะ');
+            }
             s.menuData.forEach(item => {
                 const qty = s.cart[item.id] || 0;
                 const span = document.getElementById(`qty-${type}-${item.id}`);
@@ -1671,8 +1757,17 @@
                             saveLocalProfile({ fullname: fullname, phone: phone, address: isPickup ? '' : address }); // ครั้งหน้าเติมให้ทันที
                             document.getElementById('food-order-section').classList.add('hidden');
                             document.getElementById('food-rider-order-id').innerText = 'ออเดอร์: ' + res.orderId;
+                            const round = foodRoundInfo(foodSettings, new Date());
+                            const deliveryEl = document.getElementById('food-rider-delivery');
+                            deliveryEl.classList.toggle('hidden', !round);
+                            if (round) deliveryEl.innerText = '🗓️ ออเดอร์นี้จัดส่ง' + fmtDelivery(round, round.deliveryDate);
                             document.getElementById('food-rider-section').classList.remove('hidden');
                             window.scrollTo(0, 0);
+                            if (itemsHaveStockLimit('food', itemsOrdered)) refreshMenuFromServer(false);
+                        } else if (res.stockError) {
+                            handleStockError('food', res.error);
+                            btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                            btnSubmit.disabled = false;
                         } else {
                             alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + res.error);
                             btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
@@ -1761,6 +1856,11 @@
                             document.getElementById('nw-success-message').innerText = msg;
                             document.getElementById('nw-order-success').classList.remove('hidden');
                             window.scrollTo(0, 0);
+                            if (itemsHaveStockLimit('nw', itemsOrdered)) refreshMenuFromServer(false);
+                        } else if (res.stockError) {
+                            handleStockError('nw', res.error);
+                            btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
+                            btnSubmit.disabled = false;
                         } else {
                             alert('เกิดข้อผิดพลาดในการส่งออเดอร์: ' + res.error);
                             btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
@@ -1786,11 +1886,67 @@
 
         // ---------------- ตะกร้าสินค้า (ใช้ร่วมกันทั้ง 2 แท็บ) ----------------
 
+        // สต็อกคงเหลือของสินค้า: null = ไม่จำกัด (ไม่ได้ตั้งสต็อก / หลังบ้านรุ่นเก่า)
+        function stockLeft(item) {
+            if (!item || item.stock === null || item.stock === undefined || item.stock === '') return null;
+            const n = Number(item.stock);
+            return isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+        }
+
+        function itemsHaveStockLimit(type, items) {
+            return items.some(it => stockLeft(state[type].menuData.find(x => String(x.id) === String(it.id))) !== null);
+        }
+
+        // ข้อความแจ้งสั้นๆ ลอยด้านล่างจอ หายเองใน 2.5 วิ (ไม่ใช้ alert - ลูกค้ากด + รัวๆ แล้วเด้งกล่องซ้ำจะน่ารำคาญ)
+        let cartNoticeTimer = null;
+        function showCartNotice(text) {
+            let el = document.getElementById('cart-notice');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'cart-notice';
+                el.className = 'fixed left-1/2 -translate-x-1/2 bottom-24 z-50 max-w-[90vw] bg-gray-900/90 text-white text-sm font-bold px-4 py-2 rounded-full shadow-lg text-center';
+                document.body.appendChild(el);
+            }
+            el.innerText = text;
+            el.classList.remove('hidden');
+            clearTimeout(cartNoticeTimer);
+            cartNoticeTimer = setTimeout(() => el.classList.add('hidden'), 2500);
+        }
+
+        // ดึงเมนูล่าสุดจากหลังบ้านตรงๆ (ไม่ผ่าน Firebase ที่อาจยังเป็นสต็อกเก่าอยู่ ~10 วิ หลังมีคนสั่ง)
+        // forceRender=false: อัปเดตข้อมูล/แคชในเครื่องอย่างเดียว ไม่วาดเมนูทับหน้าที่ลูกค้ากำลังดูอยู่
+        function refreshMenuFromServer(forceRender) {
+            return callApi('getBootstrap').then((data) => {
+                if (!data || !data.nwMenu || !data.foodMenu) return;
+                saveCachedBootstrap(data);
+                lastBootstrapJson = JSON.stringify(data);
+                if (forceRender) {
+                    applyBootstrap(data, false, false);
+                } else {
+                    state.food.menuData = data.foodMenu;
+                    state.nw.menuData = data.nwMenu;
+                }
+            }).catch(() => { /* ไม่เป็นไร รอบหน้าที่เปิดหน้าจะโหลดใหม่เอง */ });
+        }
+
+        // หลังบ้านแจ้งว่าสต็อกไม่พอ: กลับไปหน้าเมนู แล้วโหลดจำนวนคงเหลือล่าสุด (ตะกร้าจะถูกปรับลดให้เอง)
+        function handleStockError(type, message) {
+            alert(message);
+            backToMenu(type);
+            refreshMenuFromServer(true);
+        }
+
         function updateCart(type, itemId, change) {
             const s = state[type];
             if (!s.cart[itemId]) s.cart[itemId] = 0;
             s.cart[itemId] += change;
             if (s.cart[itemId] < 0) s.cart[itemId] = 0;
+            // จำกัดไม่เกินสต็อกคงเหลือ (หลังบ้านเช็กซ้ำตอนสั่งจริงอีกชั้น)
+            const limit = stockLeft(s.menuData.find(x => String(x.id) === String(itemId)));
+            if (limit !== null && s.cart[itemId] > limit) {
+                s.cart[itemId] = limit;
+                showCartNotice(limit > 0 ? 'สินค้านี้เหลือเพียง ' + limit + ' ชิ้นค่ะ' : 'ขออภัยค่ะ สินค้านี้หมดแล้ว');
+            }
 
             document.getElementById(`qty-${type}-${itemId}`).innerText = s.cart[itemId];
 
