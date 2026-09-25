@@ -24,7 +24,6 @@
     <!-- Firebase Auth: ล็อกอิน Google/Facebook (โปรเจกต์เดียวกับ Yateem TV - โดเมนเดียวกัน ล็อกอินครั้งเดียวใช้ได้ทั้งสองเว็บ) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
-    <script src="phone-login.js" defer></script>
     <style>
         /* ============================================================
            Yateem UI — Clean White Minimalist + Deep Navy + Gold + ฟอนต์ Kanit
@@ -388,7 +387,6 @@
             <p class="text-sm text-gray-600 mb-5">เลือกบัญชีที่สะดวกได้เลยค่ะ ใช้บัญชีเดิมทุกครั้งเพื่อติดตามออเดอร์ได้ครบ</p>
             <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
             <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">💬 เข้าสู่ระบบด้วย LINE</button>
-            <button onclick="phoneLogin()" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📱 เข้าสู่ระบบด้วยเบอร์โทรศัพท์</button>
             <a id="open-in-line-link" href="#" class="block text-sm text-green-700 underline mb-3">หรือเปิดร้านในแอป LINE</a>
             <button onclick="closeLoginChooser()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
         </div>
@@ -1234,7 +1232,7 @@
         let pendingLoginType = null;   // แท็บที่กำลังจะเช็กเอาต์ตอนเปิดหน้าต่างเลือกล็อกอิน
 
         function isSocialUser(u) {
-            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com' || p.providerId === 'phone'));
+            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com'));
         }
 
         function initWebAuth() {
@@ -1328,25 +1326,9 @@
         }
 
         function webLogout() {
-            // ออกเฉพาะบัญชีจริง (Google/เบอร์โทร) - ไม่แตะบัญชี anonymous ของแชท Yateem TV ที่ใช้ร่วมกันในเครื่อง
+            // ออกเฉพาะบัญชีจริง (Google) - ไม่แตะบัญชี anonymous ของแชท Yateem TV ที่ใช้ร่วมกันในเครื่อง
             try { if (webUser && typeof firebase !== 'undefined' && firebase.apps.length) firebase.auth().signOut(); } catch (e) {}
             webUser = null;
-        }
-
-        // ---------------- ล็อกอินด้วยเบอร์โทรศัพท์ (phone-login.js) ----------------
-        function phoneLogin() {
-            const type = pendingLoginType;
-            closeLoginChooser();
-            initWebAuth().then(() => {
-                if (typeof PhoneLogin === 'undefined') { alert('โหลดระบบล็อกอินไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ'); return; }
-                PhoneLogin.open({
-                    onSuccess: (user) => {
-                        webUser = isSocialUser(user) ? user : null;
-                        updateAccountBar();
-                        if (webUser && type) proceedToCheckout(type); // เปิดจากปุ่มสั่งซื้อ = ไปต่อที่ฟอร์มเลย
-                    }
-                });
-            });
         }
 
         // ---------------- จำผู้ใช้ที่ล็อกอินไว้ + แถบบัญชีบนหัวร้าน ----------------
@@ -1366,8 +1348,8 @@
 
         function webUserLabel(u) {
             const providers = (u.providerData || []).map(p => p && p.providerId);
-            const channel = providers.indexOf('phone') > -1 ? 'เบอร์โทร' : (providers.indexOf('facebook.com') > -1 ? 'Facebook' : 'Google');
-            const name = u.displayName || u.email || (typeof PhoneLogin !== 'undefined' ? PhoneLogin.maskPhone(u.phoneNumber) : u.phoneNumber) || 'ลูกค้า';
+            const channel = providers.indexOf('facebook.com') > -1 ? 'Facebook' : 'Google';
+            const name = u.displayName || u.email || 'ลูกค้า';
             return { name: name, channel: channel };
         }
 
