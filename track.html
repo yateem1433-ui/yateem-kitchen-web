@@ -17,6 +17,7 @@
     <!-- Firebase Auth: ติดตามออเดอร์ด้วยบัญชี Google/Facebook (โปรเจกต์เดียวกับ Yateem TV) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="phone-login.js"></script>
 </head>
 <body class="bg-gray-100 font-sans p-4">
 
@@ -38,6 +39,7 @@
             <p class="text-sm text-gray-500 mb-5">ใช้บัญชีเดียวกับตอนสั่งซื้อนะคะ</p>
             <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
             <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2">💬 เข้าสู่ระบบด้วย LINE</button>
+            <button onclick="phoneLogin()" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2">📱 เข้าสู่ระบบด้วยเบอร์โทรศัพท์</button>
             <a id="open-in-line-link" href="#" class="inline-block text-sm text-green-700 underline mt-1">หรือเปิดในแอป LINE</a>
         </div>
         <p id="web-account" class="hidden text-center text-xs text-gray-500 pt-3"></p>
@@ -238,7 +240,14 @@
         }
 
         function isSocialUser(u) {
-            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com'));
+            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com' || p.providerId === 'phone'));
+        }
+
+        // ล็อกอินด้วยเบอร์โทรศัพท์ (phone-login.js) - สำเร็จแล้วรีโหลดให้ main() ดึงออเดอร์ของบัญชีนี้
+        async function phoneLogin() {
+            await initWebAuth();
+            if (typeof PhoneLogin === 'undefined') { alert('โหลดระบบล็อกอินไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ'); return; }
+            PhoneLogin.open({ onSuccess: () => location.reload() });
         }
 
         function initWebAuth() {
@@ -350,9 +359,11 @@
 
         function showWebAccount() {
             const acc = document.getElementById('web-account');
-            const provider = (webUser.providerData || []).some(p => p.providerId === 'facebook.com') ? 'Facebook' : 'Google';
+            const ids = (webUser.providerData || []).map(p => p && p.providerId);
+            const provider = ids.indexOf('phone') > -1 ? 'เบอร์โทร' : (ids.indexOf('facebook.com') > -1 ? 'Facebook' : 'Google');
+            const name = webUser.displayName || webUser.email || (typeof PhoneLogin !== 'undefined' ? PhoneLogin.maskPhone(webUser.phoneNumber) : webUser.phoneNumber) || '';
             acc.textContent = '';
-            acc.append('เข้าสู่ระบบด้วย ' + provider + ': ' + (webUser.displayName || webUser.email || '') + ' · ');
+            acc.append('เข้าสู่ระบบด้วย ' + provider + ': ' + name + ' · ');
             const out = document.createElement('a');
             out.href = 'javascript:void(0)'; out.className = 'underline'; out.textContent = 'ออกจากระบบ';
             out.onclick = webLogout;
@@ -394,7 +405,16 @@
                     if (!shownFromCache) showError('ดึงข้อมูลโปรไฟล์ LINE ไม่สำเร็จ: ' + err.message);
                     return;
                 }
-                try { localStorage.setItem(LAST_LINE_UID_KEY, profile.userId); } catch (e) {}
+                try {
+                    localStorage.setItem(LAST_LINE_UID_KEY, profile.userId);
+                    // โปรไฟล์ LINE ที่หน้าร้านใช้โชว์ "เข้าสู่ระบบเป็นใคร" (คีย์เดียวกับ index.html)
+                    localStorage.setItem('yateemLineProfile', JSON.stringify({ userId: profile.userId, displayName: profile.displayName || '', pictureUrl: profile.pictureUrl || '', ts: Date.now() }));
+                } catch (e) {}
+                if (!liff.isInClient()) {
+                    const acc = document.getElementById('web-account');
+                    acc.textContent = 'เข้าสู่ระบบด้วย LINE: ' + (profile.displayName || '');
+                    acc.classList.remove('hidden');
+                }
                 startOrdersFor(profile.userId);
                 return;
             }

@@ -24,6 +24,7 @@
     <!-- Firebase Auth: ล็อกอิน Google/Facebook (โปรเจกต์เดียวกับ Yateem TV - โดเมนเดียวกัน ล็อกอินครั้งเดียวใช้ได้ทั้งสองเว็บ) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+    <script src="phone-login.js" defer></script>
     <style>
         /* ============================================================
            Yateem UI — Clean White Minimalist + Deep Navy + Gold + ฟอนต์ Kanit
@@ -122,6 +123,11 @@
             <div class="mt-3 relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style="color:#EAB934;">🔍</span>
                 <input id="menu-search" type="text" oninput="filterBySearch(this.value)" placeholder="ค้นหาเมนู / สินค้า..." class="w-full pl-9 pr-3 py-2 rounded-full text-sm" style="background:#F5F5F5;border:1px solid #F0F0F0;color:#0E2036;">
+            </div>
+            <!-- บัญชีที่จำไว้ในเครื่อง: โชว์ว่าเข้าสู่ระบบเป็นใคร / ปุ่มเข้าสู่ระบบ-ออกจากระบบ (ดู updateAccountBar) -->
+            <div id="account-bar" class="hidden mt-2 flex items-center justify-between gap-2 text-xs" style="color:#666666;">
+                <span id="account-bar-text" class="truncate"></span>
+                <button id="account-bar-btn" type="button" class="font-bold underline whitespace-nowrap" style="color:#093862;"></button>
             </div>
         </header>
 
@@ -382,6 +388,7 @@
             <p class="text-sm text-gray-600 mb-5">เลือกบัญชีที่สะดวกได้เลยค่ะ ใช้บัญชีเดิมทุกครั้งเพื่อติดตามออเดอร์ได้ครบ</p>
             <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
             <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">💬 เข้าสู่ระบบด้วย LINE</button>
+            <button onclick="phoneLogin()" class="block w-full bg-blue-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-blue-700">📱 เข้าสู่ระบบด้วยเบอร์โทรศัพท์</button>
             <a id="open-in-line-link" href="#" class="block text-sm text-green-700 underline mb-3">หรือเปิดร้านในแอป LINE</a>
             <button onclick="closeLoginChooser()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
         </div>
@@ -580,8 +587,9 @@
             // จะเสีย "user activation" ของการคลิกไปตามระหว่างรอ ทำให้เบราว์เซอร์ไม่ยอมให้ redirect
             // ออกจาก iframe ของ Apps Script ไปหน้า login ของ LINE ได้ (ต้นเหตุของ error "won't allow to display")
             // SDK ของ LIFF/Firebase โหลดแบบ defer - รอ DOMContentLoaded ก่อนค่อย init (ไม่บล็อกการโหลดเมนู)
+            updateAccountBar(); // โชว์บัญชีที่จำไว้ทันที (LINE จากเครื่อง) ก่อนรอ SDK
             const initSdks = () => {
-                ensureLiffInit().catch(() => { /* เดี๋ยวลอง init ใหม่อีกทีตอนกดเช็กเอาต์ */ });
+                refreshLineAccount(); // เริ่ม liff.init() + ดึงโปรไฟล์ LINE ถ้ายังล็อกอินค้างอยู่ (ถ้าพังเดี๋ยวลองใหม่ตอนกดเช็กเอาต์)
                 initWebAuth();
             };
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSdks);
@@ -1195,7 +1203,8 @@
         function ensureLiffInit() {
             if (!liffInitPromise) {
                 if (typeof liff === 'undefined') return Promise.reject(new Error('LIFF SDK ยังโหลดไม่เสร็จ'));
-                liffInitPromise = liff.init({ liffId: MY_LIFF_ID });
+                // พลาดแล้วล้าง promise ทิ้ง ให้ครั้งหน้าลอง init ใหม่ได้ (เดิมเก็บ promise ที่ล้มไว้ตลอด = กด LINE กี่ทีก็ไม่ได้จนรีเฟรช)
+                liffInitPromise = liff.init({ liffId: MY_LIFF_ID }).catch((err) => { liffInitPromise = null; throw err; });
             }
             return liffInitPromise;
         }
@@ -1225,7 +1234,7 @@
         let pendingLoginType = null;   // แท็บที่กำลังจะเช็กเอาต์ตอนเปิดหน้าต่างเลือกล็อกอิน
 
         function isSocialUser(u) {
-            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com'));
+            return !!u && !u.isAnonymous && (u.providerData || []).some(p => p && (p.providerId === 'google.com' || p.providerId === 'facebook.com' || p.providerId === 'phone'));
         }
 
         function initWebAuth() {
@@ -1240,6 +1249,7 @@
                     let first = true;
                     auth.onAuthStateChanged((u) => {
                         webUser = isSocialUser(u) ? u : null;
+                        updateAccountBar();
                         if (first) { first = false; resolve(webUser); }
                     });
                     setTimeout(() => { if (first) { first = false; resolve(null); } }, 6000);
@@ -1318,8 +1328,90 @@
         }
 
         function webLogout() {
-            try { if (typeof firebase !== 'undefined' && firebase.apps.length) firebase.auth().signOut(); } catch (e) {}
+            // ออกเฉพาะบัญชีจริง (Google/เบอร์โทร) - ไม่แตะบัญชี anonymous ของแชท Yateem TV ที่ใช้ร่วมกันในเครื่อง
+            try { if (webUser && typeof firebase !== 'undefined' && firebase.apps.length) firebase.auth().signOut(); } catch (e) {}
             webUser = null;
+        }
+
+        // ---------------- ล็อกอินด้วยเบอร์โทรศัพท์ (phone-login.js) ----------------
+        function phoneLogin() {
+            const type = pendingLoginType;
+            closeLoginChooser();
+            initWebAuth().then(() => {
+                if (typeof PhoneLogin === 'undefined') { alert('โหลดระบบล็อกอินไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ'); return; }
+                PhoneLogin.open({
+                    onSuccess: (user) => {
+                        webUser = isSocialUser(user) ? user : null;
+                        updateAccountBar();
+                        if (webUser && type) proceedToCheckout(type); // เปิดจากปุ่มสั่งซื้อ = ไปต่อที่ฟอร์มเลย
+                    }
+                });
+            });
+        }
+
+        // ---------------- จำผู้ใช้ที่ล็อกอินไว้ + แถบบัญชีบนหัวร้าน ----------------
+        // LINE: เก็บโปรไฟล์ล่าสุดไว้ในเครื่อง (ชื่อ/รูป) ไว้โชว์ว่าเข้าสู่ระบบเป็นใครทันทีที่เปิดหน้า
+        // ใช้แสดงผลอย่างเดียว - ตอนสั่งซื้อยังต้องผ่าน LIFF จริงเหมือนเดิม (ไม่ได้ใช้ userId จากที่เก็บไว้นี้)
+        const LINE_PROFILE_KEY = 'yateemLineProfile';
+        function saveLineProfile(p) {
+            if (!p || !p.userId) return;
+            try {
+                localStorage.setItem(LINE_PROFILE_KEY, JSON.stringify({ userId: p.userId, displayName: p.displayName || '', pictureUrl: p.pictureUrl || '', ts: Date.now() }));
+                localStorage.setItem('yateemLastLineUid', p.userId);
+            } catch (e) {}
+        }
+        function readLineProfile() {
+            try { return JSON.parse(localStorage.getItem(LINE_PROFILE_KEY) || 'null'); } catch (e) { return null; }
+        }
+
+        function webUserLabel(u) {
+            const providers = (u.providerData || []).map(p => p && p.providerId);
+            const channel = providers.indexOf('phone') > -1 ? 'เบอร์โทร' : (providers.indexOf('facebook.com') > -1 ? 'Facebook' : 'Google');
+            const name = u.displayName || u.email || (typeof PhoneLogin !== 'undefined' ? PhoneLogin.maskPhone(u.phoneNumber) : u.phoneNumber) || 'ลูกค้า';
+            return { name: name, channel: channel };
+        }
+
+        function updateAccountBar() {
+            const bar = document.getElementById('account-bar');
+            if (!bar) return;
+            const text = document.getElementById('account-bar-text');
+            const btn = document.getElementById('account-bar-btn');
+            const line = readLineProfile();
+            if (webUser) {
+                const l = webUserLabel(webUser);
+                text.textContent = '👤 ' + l.name + ' (' + l.channel + ')';
+                btn.textContent = 'ออกจากระบบ';
+                btn.onclick = accountLogout;
+            } else if (line && line.displayName) {
+                text.textContent = '👤 ' + line.displayName + ' (LINE)';
+                btn.textContent = 'ออกจากระบบ';
+                btn.onclick = accountLogout;
+            } else {
+                text.textContent = 'ยังไม่ได้เข้าสู่ระบบ';
+                btn.textContent = 'เข้าสู่ระบบ';
+                btn.onclick = () => { pendingLoginType = null; showOpenInLineNotice(); };
+            }
+            // ในแอป LINE ล็อกอินให้อัตโนมัติอยู่แล้ว ไม่ต้องมีปุ่มออก/เข้า
+            const inLineApp = /\bLine\//i.test(navigator.userAgent || '');
+            btn.classList.toggle('hidden', inLineApp);
+            bar.classList.remove('hidden');
+        }
+
+        // เปิดหน้ามาแล้ว LIFF ยังล็อกอินค้างอยู่ - ดึงโปรไฟล์มาเก็บ/โชว์ (เบื้องหลัง ไม่บล็อกอะไร)
+        function refreshLineAccount() {
+            ensureLiffInit().then(() => {
+                if (!liff.isLoggedIn()) return;
+                return liff.getProfile().then((p) => { profile = p; saveLineProfile(p); updateAccountBar(); });
+            }).catch(() => { /* LINE ใช้ไม่ได้ตอนนี้ - โชว์โปรไฟล์ที่จำไว้แทน */ });
+        }
+
+        function accountLogout() {
+            if (!confirm('ออกจากระบบใช่ไหมคะ?')) return;
+            webLogout();
+            try { localStorage.removeItem(LINE_PROFILE_KEY); localStorage.removeItem('yateemLastLineUid'); } catch (e) {}
+            try { if (typeof liff !== 'undefined' && liff.isLoggedIn() && !liff.isInClient()) liff.logout(); } catch (e) {}
+            profile = {};
+            updateAccountBar();
         }
 
         function currentTab() {
@@ -1423,6 +1515,8 @@
             try {
                 if (!webUser && !profile.userId) {
                     profile = await liff.getProfile();
+                    saveLineProfile(profile);
+                    updateAccountBar();
                 }
                 idp = await identityParams();
             } catch (err) {
