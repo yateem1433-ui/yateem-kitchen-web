@@ -99,10 +99,9 @@
         .menu-text{ word-break: normal; overflow-wrap: anywhere; }
         /* ตาข่ายกันพลาด: ถ้ามีอะไรล้นในอนาคต ห้ามดันทั้งหน้าให้เลื่อนขวาได้ (clip ไม่ทำให้ sticky header พังแบบ hidden) */
         html, body{ max-width:100%; overflow-x: clip; }
-        /* รายละเอียดสินค้าใต้ชื่อ: โชว์ 2 บรรทัดแรก กด "แสดงเพิ่มเติม" เพื่อกางทั้งหมด (คงการขึ้นบรรทัดที่แอดมินพิมพ์ไว้) */
+        /* รายละเอียดสินค้าใต้ชื่อ: การ์ดโชว์ 2 บรรทัดแรก ตัวเต็มอ่านในแผ่นลอย #product-modal (คงการขึ้นบรรทัดที่แอดมินพิมพ์ไว้) */
         .menu-desc{ white-space: pre-line; line-height: 1.5; overflow-wrap: anywhere;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-        .menu-desc.open{ display: block; -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -406,6 +405,36 @@
                 <div id="reviews-modal-empty" class="hidden text-center py-6 text-gray-400">ยังไม่มีรีวิวสำหรับสินค้านี้</div>
                 <div id="reviews-modal-list" class="space-y-4"></div>
                 <button onclick="closeReviewsModal()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg mt-4">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- รายละเอียดสินค้า: แผ่นลอยขึ้นจากล่าง (แบบเดียวกับแผ่นรีวิว) ตัวหนังสือใหญ่อ่านง่าย
+         เปิดจากปุ่ม "ดูรายละเอียด" / แตะรูปหรือชื่อในการ์ด | ปิด: ×, แตะพื้นหลัง, ปัดลง -->
+    <div id="product-modal" class="hidden fixed inset-0 z-50 flex items-end justify-center" style="background:rgba(0,0,0,.5)" onclick="if(event.target===this)closeProductModal()">
+        <div id="product-sheet" class="bg-white shadow-xl w-full max-w-sm" style="max-height:85vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom);transform:translateY(100%);transition:transform .25s ease">
+            <div id="product-grab" style="padding:10px 16px 6px;touch-action:none">
+                <div style="width:44px;height:5px;border-radius:3px;background:#d1d5db;margin:0 auto 8px"></div>
+                <div class="flex items-start justify-between gap-2">
+                    <h2 id="product-modal-name" class="menu-text text-lg font-bold text-gray-800 leading-snug"></h2>
+                    <button onclick="closeProductModal()" aria-label="ปิด" class="text-gray-400 text-3xl leading-none px-2 -mt-1">×</button>
+                </div>
+            </div>
+            <div id="product-scroll" style="overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:4px 16px 12px;flex:1;min-height:0">
+                <img id="product-modal-img" src="" alt="" class="w-full rounded-xl object-cover bg-gray-100" style="max-height:40vh">
+                <div id="product-modal-price" class="mt-1"></div>
+                <div id="product-modal-desc-wrap" class="mt-3 pt-3 border-t border-gray-100">
+                    <h3 class="text-sm font-bold text-gray-500 mb-1">รายละเอียดสินค้า</h3>
+                    <p id="product-modal-desc" class="menu-text text-base text-gray-700" style="white-space:pre-line;line-height:1.75"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 border-t border-gray-100" style="padding:10px 16px">
+                <div class="flex items-center gap-3 border border-gray-200 rounded-full p-1.5 bg-gray-50">
+                    <button onclick="productModalQty(-1)" aria-label="ลดจำนวน" class="w-9 h-9 rounded-full bg-white font-bold text-lg shadow">-</button>
+                    <span id="product-modal-qty" class="font-bold text-lg w-7 text-center">0</span>
+                    <button id="product-modal-plus" onclick="productModalQty(1)" aria-label="เพิ่มจำนวน" class="w-9 h-9 rounded-full text-white font-bold text-lg shadow">+</button>
+                </div>
+                <button onclick="closeProductModal()" class="flex-1 bg-gray-200 text-gray-700 font-bold py-2.5 rounded-full">ปิด</button>
             </div>
         </div>
     </div>
@@ -876,21 +905,23 @@
                     const ratingHtml = item.ratingCount > 0
                         ? `<button type="button" onclick="openReviewsModal('${item.id}', '${safeName}')" class="text-xs text-yellow-600 font-bold underline decoration-dotted">★ ${item.rating} (${item.ratingCount} รีวิว)</button>`
                         : '';
-                    // รายละเอียดสินค้า (แอดมินพิมพ์ในหน้าแอดมิน) - escape ก่อนแทรก, ปุ่มกางจะโชว์เฉพาะที่ยาวเกิน 2 บรรทัด (ดู fitMenuDescriptions)
+                    // รายละเอียดสินค้า (แอดมินพิมพ์ในหน้าแอดมิน) - การ์ดโชว์แค่ 2 บรรทัดแรก ตัวเต็มอ่านในแผ่นลอย (openProductModal)
+                    // ปุ่ม "ดูรายละเอียด" โชว์เฉพาะที่ถูกตัด (ดู fitMenuDescriptions) - แตะรูป/ชื่อก็เปิดแผ่นเดียวกันได้เสมอ
+                    const openAttr = `onclick="openProductModal('${type}', '${item.id}')"`;
                     const descHtml = item.description
-                        ? `<p class="menu-desc text-xs sm:text-sm text-gray-600 mt-1">${escapeHtml(item.description)}</p>
-                           <button type="button" onclick="toggleMenuDesc(this)" class="menu-desc-toggle hidden text-xs font-bold text-gray-500 mt-0.5">แสดงเพิ่มเติม ˅</button>`
+                        ? `<p class="menu-desc text-xs sm:text-sm text-gray-600 mt-1 cursor-pointer" ${openAttr}>${escapeHtml(item.description)}</p>
+                           <button type="button" ${openAttr} class="menu-desc-toggle hidden text-xs font-bold text-blue-600 mt-0.5">ดูรายละเอียด ›</button>`
                         : '';
                     const itemHtml = `
                         <div data-category="${item.category || ''}" class="flex bg-white p-3 sm:p-4 rounded-lg shadow items-start gap-3 sm:gap-4">
                             <div class="relative flex-shrink-0">
-                                <img src="${item.imageUrl || PLACEHOLDER_IMG}" alt="${item.name}" width="96" height="96" loading="lazy" decoding="async" class="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover">
+                                <img src="${item.imageUrl || PLACEHOLDER_IMG}" alt="${item.name}" width="96" height="96" loading="lazy" decoding="async" class="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover cursor-pointer" ${openAttr}>
                                 ${item.isPopular ? '<span class="absolute -top-1 -left-1 bg-red-500 text-white text-[8px] leading-none font-bold px-1 py-[3px] rounded shadow-sm whitespace-nowrap">🔥ขายดี</span>' : ''}
                                 ${item.promo ? '<span class="absolute -bottom-1 -right-1 text-white text-[8px] leading-none font-extrabold px-1.5 py-[3px] rounded shadow-md whitespace-nowrap promo-badge-pulse" style="background:linear-gradient(90deg,#DC2626,#EAB934);">🎉 โปรฯ</span>' : ''}
                             </div>
                             <!-- min-w-0 = ยอมให้คอลัมน์ข้อความหดตามจอ ชื่อยาวจะขึ้นบรรทัดใหม่แทนการดันการ์ดล้นขอบ -->
                             <div class="flex-1 min-w-0">
-                                <h3 class="menu-text font-semibold text-base sm:text-lg leading-snug text-gray-800">${item.name}</h3>
+                                <h3 class="menu-text font-semibold text-base sm:text-lg leading-snug text-gray-800 cursor-pointer" ${openAttr}>${item.name}</h3>
                                 ${ratingHtml}
                                 ${descHtml}
                                 <div id="price-block-${type}-${item.id}">${renderPriceBlock(type, item, opts.priceColor)}</div>
@@ -919,7 +950,7 @@
         function fitMenuDescriptions(container) {
             container.querySelectorAll('.menu-desc').forEach((p) => {
                 const btn = p.nextElementSibling;
-                if (!btn || !btn.classList.contains('menu-desc-toggle') || p.classList.contains('open')) return;
+                if (!btn || !btn.classList.contains('menu-desc-toggle')) return;
                 const clipped = p.clientHeight > 0
                     ? p.scrollHeight > p.clientHeight + 1
                     : (p.textContent.length > 60 || p.querySelector('br') !== null || /\n/.test(p.textContent));
@@ -927,10 +958,60 @@
             });
         }
 
-        function toggleMenuDesc(btn) {
-            const p = btn.previousElementSibling;
-            const open = p.classList.toggle('open');
-            btn.innerText = open ? 'แสดงน้อยลง ˄' : 'แสดงเพิ่มเติม ˅';
+        // ---------------- แผ่นลอยรายละเอียดสินค้า ----------------
+        // ใช้ข้อมูลใน state ที่โหลดมาแล้ว ไม่ต้องยิง API | ปุ่ม +/- ในแผ่นเรียก updateCart ตัวเดียวกับการ์ด (การ์ด/ยอดรวมอัปเดตตาม)
+        let productModalItem = null; // { type, id }
+
+        function openProductModal(type, id) {
+            const item = (state[type].menuData || []).find(x => String(x.id) === String(id));
+            if (!item) return;
+            productModalItem = { type: type, id: item.id };
+            const priceColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
+
+            document.getElementById('product-modal-name').innerText = item.name || '';
+            const img = document.getElementById('product-modal-img');
+            img.src = item.imageUrl || PLACEHOLDER_IMG;
+            img.alt = item.name || '';
+            document.getElementById('product-modal-price').innerHTML = renderPriceBlock(type, item, priceColor);
+            document.getElementById('product-modal-desc').innerText = item.description || '';
+            document.getElementById('product-modal-desc-wrap').classList.toggle('hidden', !item.description);
+            document.getElementById('product-modal-plus').className =
+                'w-9 h-9 rounded-full text-white font-bold text-lg shadow ' + (type === 'food' ? 'bg-green-500' : 'bg-blue-500');
+            document.getElementById('product-modal-qty').innerText = state[type].cart[item.id] || 0;
+            document.getElementById('product-scroll').scrollTop = 0;
+
+            const modal = document.getElementById('product-modal');
+            const sheet = document.getElementById('product-sheet');
+            sheet.style.transition = 'none';
+            sheet.style.transform = 'translateY(100%)';
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // กันหน้าร้านด้านหลังเลื่อนตามนิ้ว
+            void sheet.offsetHeight;                  // ให้เบราว์เซอร์วาดตำแหน่งเริ่มก่อน แล้วค่อยเลื่อนขึ้น
+            sheet.style.transition = 'transform .25s ease';
+            sheet.style.transform = 'translateY(0)';
+        }
+
+        function closeProductModal() {
+            const modal = document.getElementById('product-modal');
+            const sheet = document.getElementById('product-sheet');
+            if (modal.classList.contains('hidden')) return;
+            sheet.style.transition = 'transform .2s ease';
+            sheet.style.transform = 'translateY(100%)';
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = ''; // คืนการเลื่อนหน้าหลัง
+            }, 190);
+            productModalItem = null;
+        }
+
+        function productModalQty(change) {
+            if (!productModalItem) return;
+            const { type, id } = productModalItem;
+            updateCart(type, id, change);
+            document.getElementById('product-modal-qty').innerText = state[type].cart[id] || 0;
+            const item = state[type].menuData.find(x => String(x.id) === String(id));
+            if (item) document.getElementById('product-modal-price').innerHTML =
+                renderPriceBlock(type, item, type === 'food' ? 'text-green-600' : 'text-blue-600');
         }
 
         // คืนสภาพตะกร้าที่เก็บไว้กลับมาบน UI หลัง render เมนูเสร็จ (จำนวน + กล่องราคาโปรฯ + ยอดรวม)
@@ -1071,14 +1152,14 @@
             document.body.style.overflow = ''; // คืนการเลื่อนหน้าหลัง
         }
 
-        // ปัดลงเพื่อปิดแผ่นรีวิว: ลากจากหัวแผ่น หรือจากรายการรีวิวตอนเลื่อนอยู่บนสุดแล้ว
-        (function setupReviewsSwipeToClose() {
-            const sheet = document.getElementById('reviews-sheet');
-            const scroller = document.getElementById('reviews-scroll');
+        // ปัดลงเพื่อปิดแผ่นลอย (แผ่นรีวิว + แผ่นรายละเอียดสินค้าใช้ร่วมกัน): ลากจากหัวแผ่น หรือจากเนื้อหาตอนเลื่อนอยู่บนสุดแล้ว
+        function setupSwipeToClose(sheetId, scrollerId, closeFn) {
+            const sheet = document.getElementById(sheetId);
+            const scroller = document.getElementById(scrollerId);
             let startY = null;
             let dy = 0;
             sheet.addEventListener('touchstart', (e) => {
-                // กำลังเลื่อนอ่านรีวิวอยู่กลางรายการ - ปล่อยให้เลื่อนตามปกติ ไม่ใช่การปัดปิด
+                // กำลังเลื่อนอ่านอยู่กลางเนื้อหา - ปล่อยให้เลื่อนตามปกติ ไม่ใช่การปัดปิด
                 if (scroller.contains(e.target) && scroller.scrollTop > 0) { startY = null; return; }
                 startY = e.touches[0].clientY;
                 dy = 0;
@@ -1100,12 +1181,14 @@
                 sheet.style.transition = 'transform .2s ease';
                 if (dy > 90) {
                     sheet.style.transform = 'translateY(100%)';
-                    setTimeout(closeReviewsModal, 180);
+                    setTimeout(closeFn, 180);
                 } else {
-                    sheet.style.transform = '';
+                    sheet.style.transform = sheetId === 'product-sheet' ? 'translateY(0)' : '';
                 }
             });
-        })();
+        }
+        setupSwipeToClose('reviews-sheet', 'reviews-scroll', closeReviewsModal);
+        setupSwipeToClose('product-sheet', 'product-scroll', closeProductModal);
 
         // ---------------- LIFF: เรียกแบบ lazy ตอนกดเช็กเอาต์เท่านั้น ----------------
 
