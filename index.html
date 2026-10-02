@@ -26,6 +26,7 @@
             if (e.data && e.data.type === 'YATEEM_MEMBER_SYNC' && e.data.profile) {
                 try {
                     localStorage.setItem('yateemMemberProfile', JSON.stringify(e.data.profile));
+                    localStorage.setItem('yateemSavedMemberInfo', JSON.stringify(e.data.profile));
                     updateAccountBar();
                 } catch (err) {}
             }
@@ -1444,7 +1445,11 @@
         }
 
         function readMemberProfile() {
-            try { return JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null'); } catch (e) { return null; }
+            try {
+                const m = JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null');
+                if (m && (m.fullname || m.phone)) return m;
+                return JSON.parse(localStorage.getItem('yateemSavedMemberInfo') || 'null');
+            } catch (e) { return null; }
         }
 
         function webUserLabel(u) {
@@ -1462,7 +1467,15 @@
             const line = readLineProfile();
             const member = readMemberProfile();
             if (member && (member.fullname || member.phone)) {
-                text.textContent = '🌟 ' + (member.fullname || member.nickname) + ' (สมาชิก Yateem)';
+                let avHtml = '';
+                if (member.avatar && (member.avatar.startsWith('data:') || member.avatar.startsWith('http'))) {
+                    avHtml = `<img src="${member.avatar}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;margin-right:6px;border:1.5px solid #EAB934">`;
+                } else if (member.avatar) {
+                    avHtml = member.avatar + ' ';
+                } else {
+                    avHtml = '🌟 ';
+                }
+                text.innerHTML = avHtml + (member.fullname || member.nickname) + ' <span style="color:#d97706;font-size:12px;font-weight:600">(สมาชิก Yateem)</span>';
                 btn.textContent = 'ออกจากระบบ';
                 btn.onclick = accountLogout;
             } else if (webUser) {
@@ -1494,12 +1507,13 @@
         }
 
         function accountLogout() {
-            if (!confirm('ต้องการออกจากระบบหรือไม่?')) return;
+            if (!confirm('ต้องการออกจากระบบหรือไม่?\n(ระบบจะยังคงจำข้อมูลสมาชิกไว้ในเครื่อง เพื่อให้คุณสั่งอาหารได้สะดวกโดยไม่ต้องพิมพ์ใหม่)')) return;
             webLogout();
             try {
                 localStorage.removeItem(LINE_PROFILE_KEY);
                 localStorage.removeItem('yateemLastLineUid');
                 localStorage.removeItem('yateemMemberProfile');
+                // yateemSavedMemberInfo is preserved!
             } catch (e) {}
             try { if (typeof liff !== 'undefined' && liff.isLoggedIn() && !liff.isInClient()) liff.logout(); } catch (e) {}
             profile = {};
