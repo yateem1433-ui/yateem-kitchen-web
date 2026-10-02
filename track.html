@@ -291,9 +291,26 @@
         }
 
         function webLogout() {
-            try { localStorage.removeItem(LAST_WEB_UID_KEY); } catch (e) {}
+            handleLogout();
+        }
+
+        function handleLogout() {
+            if (!confirm('ต้องการออกจากระบบหรือไม่?')) return;
+            try {
+                localStorage.removeItem(LAST_WEB_UID_KEY);
+                localStorage.removeItem(LAST_LINE_UID_KEY);
+                localStorage.removeItem(LINE_PROFILE_KEY);
+                localStorage.removeItem('yt_line_profile');
+            } catch (e) {}
             clearCachedOrders(); // ออกจากระบบ = ลบออเดอร์ที่เก็บไว้ในเครื่องด้วย (เครื่องอาจใช้ร่วมกับคนอื่น)
-            try { firebase.auth().signOut().then(() => location.reload()); } catch (e) { location.reload(); }
+            try { if (typeof liff !== 'undefined' && liff.isLoggedIn() && !liff.isInClient()) liff.logout(); } catch (e) {}
+            try {
+                if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+                    firebase.auth().signOut().then(() => location.reload()).catch(() => location.reload());
+                } else {
+                    location.reload();
+                }
+            } catch (e) { location.reload(); }
         }
 
         function closePage() {
@@ -311,6 +328,30 @@
         const ORDERS_STORAGE_PREFIX = 'yateemOrders_';
         const LAST_LINE_UID_KEY = 'yateemLastLineUid';
         const LAST_WEB_UID_KEY = 'yateemLastWebUid';
+        const LINE_PROFILE_KEY = 'yateemLineProfile';
+
+        function readLineProfile() {
+            try {
+                return JSON.parse(localStorage.getItem(LINE_PROFILE_KEY) || localStorage.getItem('yt_line_profile') || 'null');
+            } catch (e) { return null; }
+        }
+
+        function saveLineProfile(p) {
+            if (!p || !p.userId) return;
+            try {
+                localStorage.setItem(LINE_PROFILE_KEY, JSON.stringify({ userId: p.userId, displayName: p.displayName || '', pictureUrl: p.pictureUrl || '', ts: Date.now() }));
+                localStorage.setItem(LAST_LINE_UID_KEY, p.userId);
+            } catch (e) {}
+        }
+
+        function readCustomerName(uid) {
+            if (!uid) return '';
+            try {
+                const p = JSON.parse(localStorage.getItem('yateemProfile_' + uid) || 'null');
+                if (p && p.fullname) return p.fullname;
+            } catch (e) {}
+            return '';
+        }
 
         function readCachedOrders(uid) {
             try { return JSON.parse(localStorage.getItem(ORDERS_STORAGE_PREFIX + uid) || 'null'); } catch (e) { return null; }
@@ -323,6 +364,8 @@
                 Object.keys(localStorage).forEach((k) => { if (k.indexOf(ORDERS_STORAGE_PREFIX) === 0) localStorage.removeItem(k); });
                 localStorage.removeItem(LAST_LINE_UID_KEY);
                 localStorage.removeItem(LAST_WEB_UID_KEY);
+                localStorage.removeItem(LINE_PROFILE_KEY);
+                localStorage.removeItem('yt_line_profile');
             } catch (e) {}
         }
 
@@ -337,6 +380,8 @@
         }
 
         function startOrdersFor(uid) {
+            const notInClientEl = document.getElementById('not-in-client');
+            if (notInClientEl) notInClientEl.classList.add('hidden');
             if (shownFromCache && currentUserId !== uid) {
                 // ที่โชว์ไว้เป็นของบัญชีอื่นที่เคยใช้เครื่องนี้ - ซ่อนก่อน แล้วโหลดของบัญชีจริง
                 shownFromCache = false;
@@ -351,19 +396,31 @@
             setupVisibilityPause();
         }
 
+        function showAccountBar(info) {
+            const acc = document.getElementById('web-account');
+            if (!acc) return;
+            const channel = (info && info.channel) || 'line';
+            let icon = '💬';
+            let label = 'เข้าสู่ระบบด้วย LINE';
+            if (channel === 'google') {
+                icon = '🟢';
+                label = 'เข้าสู่ระบบด้วย Google';
+            } else if (channel === 'facebook') {
+                icon = '🔵';
+                label = 'เข้าสู่ระบบด้วย Facebook';
+            }
+            const name = (info && info.name) ? info.name : 'ลูกค้า';
+            acc.innerHTML = `<span class="truncate">${icon} ${label}: <b>${escapeHtml(name)}</b></span><button type="button" onclick="handleLogout()" class="text-red-500 hover:text-red-700 underline font-bold ml-2 flex-shrink-0">ออกจากระบบ</button>`;
+            acc.className = 'mx-4 mt-3 py-1.5 px-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center justify-between shadow-sm';
+            acc.classList.remove('hidden');
+        }
+
         function showWebAccount() {
             try { localStorage.setItem(LAST_WEB_UID_KEY, webUser.uid); } catch (e) {}
-            const acc = document.getElementById('web-account');
             const ids = (webUser.providerData || []).map(p => p && p.providerId);
-            const provider = ids.indexOf('facebook.com') > -1 ? 'Facebook' : 'Google';
+            const provider = ids.indexOf('facebook.com') > -1 ? 'facebook' : 'google';
             const name = webUser.displayName || webUser.email || '';
-            acc.textContent = '';
-            acc.append('เข้าสู่ระบบด้วย ' + provider + ': ' + name + ' · ');
-            const out = document.createElement('a');
-            out.href = 'javascript:void(0)'; out.className = 'underline'; out.textContent = 'ออกจากระบบ';
-            out.onclick = webLogout;
-            acc.appendChild(out);
-            acc.classList.remove('hidden');
+            showAccountBar({ name: name, channel: provider });
         }
 
         async function main() {
@@ -371,28 +428,32 @@
 
             const inLineApp = /\bLine\//i.test(navigator.userAgent || '');
 
-            // Check if user previously logged in via Google/Facebook
+            // 1. ตรวจสอบข้อมูลระบุตัวตนที่เคยบันทึกไว้ในเครื่องทันที (ทั้ง LINE และ Google/Facebook)
+            const savedLine = readLineProfile();
+            let lastLineUid = null;
+            try { lastLineUid = (savedLine && savedLine.userId) || localStorage.getItem(LAST_LINE_UID_KEY); } catch (e) {}
             let lastWebUid = null;
             try { lastWebUid = localStorage.getItem(LAST_WEB_UID_KEY); } catch (e) {}
 
-            // Start Firebase Auth + LIFF in parallel
+            // แสดงแคชออเดอร์และแถบบัญชีทันที (ถ้ามี) โดยไม่ต้องรอเชื่อมต่อเน็ต และไม่จำกัดเฉพาะในแอป LINE
+            if (lastLineUid) {
+                showCachedOrders(lastLineUid);
+                const dispName = (savedLine && savedLine.displayName) || readCustomerName(lastLineUid);
+                showAccountBar({ name: dispName, channel: 'line' });
+            } else if (lastWebUid) {
+                showCachedOrders('fb:' + lastWebUid);
+            }
+
+            // 2. เริ่มตรวจสอบ Firebase Auth + LIFF พร้อมกันในเบื้องหลัง
             const webReady = initWebAuth();
             const liffReadyP = withTimeout(liff.init({ liffId: MY_LIFF_ID }), 8000, 'timeout')
                 .then(() => { liffReady = true; return true; }, () => false);
 
-            // --- Show cached orders immediately (LINE + Google/Facebook) ---
-            if (inLineApp) {
-                try { const lastUid = localStorage.getItem(LAST_LINE_UID_KEY); if (lastUid) showCachedOrders(lastUid); } catch (e) {}
-            }
-            if (!shownFromCache && lastWebUid) {
-                showCachedOrders('fb:' + lastWebUid);
-            }
-
-            // --- Check Google/Facebook first (always, regardless of LINE app) ---
+            // 3. ตรวจสอบบัญชี Google/Facebook ก่อน
             if (lastWebUid) {
-                // Previously logged in โ€” wait longer for Firebase to restore session
+                // รอเซสชัน Firebase (สูงสุด 12 วิ)
                 await Promise.race([webReady, new Promise(r => setTimeout(r, 12000))]);
-            } else if (!inLineApp) {
+            } else if (!inLineApp && !lastLineUid) {
                 await webReady;
             }
             if (webUser) {
@@ -401,41 +462,48 @@
                 return;
             }
 
-            // --- Check LINE/LIFF ---
+            // 4. ตรวจสอบสถานะล็อกอินสดของ LINE/LIFF
             const liffOk = await liffReadyP;
             if (liffOk && liff.isLoggedIn()) {
-                let profile;
+                let profile = null;
                 try {
                     profile = await liff.getProfile();
                 } catch (err) {
-                    if (!shownFromCache) showError(err.message);
+                    if (!shownFromCache && !lastLineUid) showError(err.message);
+                }
+                if (profile && profile.userId) {
+                    saveLineProfile(profile);
+                    showAccountBar({ name: profile.displayName || '', channel: 'line' });
+                    startOrdersFor(profile.userId);
                     return;
                 }
-                try {
-                    localStorage.setItem(LAST_LINE_UID_KEY, profile.userId);
-                    localStorage.setItem('yateemLineProfile', JSON.stringify({ userId: profile.userId, displayName: profile.displayName || '', pictureUrl: profile.pictureUrl || '', ts: Date.now() }));
-                } catch (e) {}
-                if (!liff.isInClient()) {
-                    const acc = document.getElementById('web-account');
-                    acc.textContent = 'LINE: ' + (profile.displayName || '');
-                    acc.classList.remove('hidden');
-                }
-                startOrdersFor(profile.userId);
+            }
+            if (liffOk && liff.isInClient()) {
+                liff.login();
                 return;
             }
-            if (liffOk && liff.isInClient()) { liff.login(); return; }
 
-            // Fallback: in LINE app but LIFF failed โ€” try Firebase Auth
-            if (inLineApp && !lastWebUid) {
+            // 5. กรณีเปิดในแอป LINE แต่ LIFF มีปัญหา ให้ลองหาบัญชี Google
+            if (inLineApp && !lastWebUid && !lastLineUid) {
                 await webReady;
                 if (webUser) { showWebAccount(); startOrdersFor('fb:' + webUser.uid); return; }
             }
 
-            // If showing cached orders from previous session โ€” don't force re-login
+            // 6. กรณี LIFF หลุดหรือหมดอายุ (เช่นเปิดผ่าน Chrome/Safari/TV Web ข้ามวัน)
+            // แต่มี LINE Profile / UID ที่จำไว้ในเครื่อง -> ดึงสถานะออเดอร์ต่อได้ทันที ไม่ต้องบังคับล็อกอินใหม่ทุกวัน!
+            if (lastLineUid) {
+                const dispName = (savedLine && savedLine.displayName) || readCustomerName(lastLineUid);
+                showAccountBar({ name: dispName, channel: 'line' });
+                startOrdersFor(lastLineUid);
+                return;
+            }
+
+            // 7. กรณีเคยล็อกอิน Google ไว้ แต่ Firebase idToken ยังไม่พร้อม และแสดงแคชไปแล้ว
             if (shownFromCache) {
                 return;
             }
 
+            // 8. ไม่เคยเข้าสู่ระบบมาก่อน -> แสดงปุ่มตัวเลือกล็อกอิน
             showLoginChoices();
         }
 
