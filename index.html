@@ -201,6 +201,16 @@
 
             <div id="food-order-section" class="hidden bg-white p-6 rounded-lg shadow mb-6">
                 <h2 class="text-xl font-bold mb-4">🏠 ข้อมูลจัดส่ง & ชำระเงิน</h2>
+                <div id="food-member-info-badge" class="hidden mb-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300 text-xs text-emerald-900 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🌟</span>
+                        <div>
+                            <div class="font-bold text-emerald-950">ดึงข้อมูลสมาชิกแก้ไขล่าสุดจากหน้าเว็บ YATEEM TV มาใช้งานแล้ว</div>
+                            <div class="text-emerald-700 mt-0.5" id="food-member-info-sub"></div>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] whitespace-nowrap">สมาชิก YATEEM TV</span>
+                </div>
 
                 <form onsubmit="finalSubmitFood(event)">
                     <div class="mb-4">
@@ -320,6 +330,16 @@
 
             <div id="nw-order-section" class="hidden bg-white p-6 rounded-lg shadow mb-6">
                 <h2 class="text-xl font-bold mb-4">🚚 ข้อมูลจัดส่งทั่วประเทศ & ชำระเงิน</h2>
+                <div id="nw-member-info-badge" class="hidden mb-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-300 text-xs text-emerald-900 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🌟</span>
+                        <div>
+                            <div class="font-bold text-emerald-950">ดึงข้อมูลสมาชิกแก้ไขล่าสุดจากหน้าเว็บ YATEEM TV มาใช้งานแล้ว</div>
+                            <div class="text-emerald-700 mt-0.5" id="nw-member-info-sub"></div>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] whitespace-nowrap">สมาชิก YATEEM TV</span>
+                </div>
 
                 <form onsubmit="finalSubmitNw(event)">
                     <div class="mb-4">
@@ -422,8 +442,10 @@
             <p class="text-5xl mb-3">👤</p>
             <h2 class="text-lg font-bold text-gray-800 mb-2">เข้าสู่ระบบเพื่อสั่งซื้อ</h2>
             <p class="text-sm text-gray-600 mb-5">เลือกบัญชีที่สะดวกได้เลยค่ะ ใช้บัญชีเดิมทุกครั้งเพื่อติดตามออเดอร์ได้ครบ</p>
+            <button id="login-member-btn" onclick="memberLoginAndContinue()" class="hidden block w-full bg-gradient-to-r from-amber-500 to-yellow-500 text-white font-bold py-3 rounded-lg mb-2 shadow-md hover:from-amber-600 hover:to-yellow-600 transition">🌟 ยืนยันสั่งซื้อด้วยสมาชิก YATEEM TV</button>
             <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
             <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2 hover:bg-green-700">💬 เข้าสู่ระบบด้วย LINE</button>
+            <button onclick="guestContinueCheckout()" class="block w-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold py-2.5 rounded-lg mb-2 hover:bg-emerald-100 text-sm">📝 สั่งซื้อทันที (ไม่ผูกบัญชี)</button>
             <a id="open-in-line-link" href="#" class="block text-sm text-green-700 underline mb-3">หรือเปิดร้านในแอป LINE</a>
             <button onclick="closeLoginChooser()" class="w-full bg-gray-200 text-gray-700 font-bold py-2 rounded-lg">ปิด</button>
         </div>
@@ -629,6 +651,9 @@
                     const ph = document.getElementById(prefix + '-phone');
                     const ad = document.getElementById(prefix + '-address');
                     const saveDraft = () => {
+                        // ถ้ามีสมาชิกแก้ไขล่าสุดจาก YATEEM TV จะไม่เซฟทับเด็ดขาด
+                        const mem = readMemberProfile();
+                        if (mem && (mem.fullname || mem.phone)) return;
                         const fullname = (fn && fn.value.trim()) || '';
                         const phone = (ph && ph.value.trim()) || '';
                         const address = (ad && ad.value.trim()) || '';
@@ -1782,11 +1807,18 @@
         function saveLocalProfile(p) {
             const uid = currentProfileUid();
             const old = readLocalProfile() || {};
-            const cleanPhone = String(p.phone || old.phone || '').replace(/\D/g, '');
+            const mem = readMemberProfile(); // ข้อมูลสมาชิกแก้ไขล่าสุดจากหน้าเว็บ YATEEM TV เท่านั้น (Master Source)
+
+            // ชื่อ ที่อยู่ เบอร์โทร ยึดจากที่แก้ไขล่าสุดบนหน้าเว็บ YATEEM TV เสมอ
+            const cleanPhone = String(p.phone || (mem && mem.phone) || old.phone || '').replace(/\D/g, '');
+            const fullname = (mem && mem.fullname) ? mem.fullname : String(p.fullname || old.fullname || '').trim();
+            const phone = (mem && mem.phone) ? mem.phone : cleanPhone;
+            const address = (mem && mem.address) ? mem.address : String(p.address || old.address || '').trim();
+
             const merged = {
-                fullname: String(p.fullname || old.fullname || '').trim(),
-                phone: cleanPhone || String(old.phone || '').trim(),
-                address: String(p.address || old.address || '').trim()
+                fullname: fullname,
+                phone: phone,
+                address: address
             };
 
             // 1. บันทึกตาม UID ของช่องทางที่ล็อกอิน
@@ -1797,31 +1829,34 @@
             // 2. บันทึกเป็นโปรไฟล์จำถาวรข้ามทุกช่องทางในเครื่องนี้
             try {
                 localStorage.setItem('yateemLastProfile', JSON.stringify(merged));
-                if (cleanPhone) {
-                    localStorage.setItem(PROFILE_STORAGE_PREFIX + 'member_' + cleanPhone, JSON.stringify(merged));
-                    localStorage.setItem('yateemLastLineUid', 'member_' + cleanPhone);
+                if (phone) {
+                    localStorage.setItem(PROFILE_STORAGE_PREFIX + 'member_' + phone, JSON.stringify(merged));
+                    localStorage.setItem('yateemLastLineUid', 'member_' + phone);
                 }
             } catch (e) {}
 
-            // 3. สมัครสมาชิก / อัปเดตข้อมูลสมาชิก YATEEM อัตโนมัติทันที
-            const mem = readMemberProfile();
+            // 3. รักษาข้อมูลสมาชิก YATEEM TV ไว้เสมอ
             const line = readLineProfile();
-            const memberId = (mem && mem.memberId) || genMemberId(cleanPhone);
+            const memberId = (mem && mem.memberId) || genMemberId(phone);
             const memberProfile = {
                 memberId: memberId,
-                fullname: merged.fullname || (mem && mem.fullname) || '',
-                phone: cleanPhone || (mem && mem.phone) || '',
-                address: merged.address || (mem && mem.address) || '',
-                nickname: (mem && mem.nickname) || (merged.fullname ? merged.fullname.split(' ')[0] : 'สมาชิก'),
+                fullname: fullname,
+                phone: phone,
+                address: address,
+                nickname: (mem && mem.nickname) || (fullname ? fullname.split(' ')[0] : 'สมาชิก'),
                 avatar: (mem && mem.avatar) || (line && line.pictureUrl) || (webUser && webUser.photoURL) || '',
+                source: (mem && mem.source) || 'YATEEM_TV',
                 channel: webUser ? ('Google/Facebook: ' + (webUser.displayName || '')) : (line && line.displayName ? ('LINE: ' + line.displayName) : 'Yateem Market'),
                 registeredAt: (mem && mem.registeredAt) || Date.now(),
-                updatedAt: Date.now()
+                updatedAt: (mem && mem.updatedAt) || Date.now()
             };
 
             try {
                 localStorage.setItem('yateemMemberProfile', JSON.stringify(memberProfile));
                 localStorage.setItem('yateemSavedMemberInfo', JSON.stringify(memberProfile));
+                if (mem && (mem.source === 'YATEEM_TV' || localStorage.getItem('yateemMasterProfile'))) {
+                    localStorage.setItem('yateemMasterProfile', JSON.stringify(memberProfile));
+                }
             } catch (e) {}
 
             // 4. ซิงก์ข้ามไปยัง YATEEM TV (ถ้าเปิดอยู่ใน iframe หรือหน้าต่างเดียวกัน)
@@ -1836,7 +1871,7 @@
 
             // 6. ตรวจสอบระดับสมาชิก VIP ล่าสุดจากเซิร์ฟเวอร์ (เกณฑ์ 2,000 บ./เดือน หรือ 12,000 บ./ปี หรือแอดมินปรับให้)
             try {
-                callApi('getMemberTierStatus', { phone: cleanPhone, userId: uid })
+                callApi('getMemberTierStatus', { phone: phone, userId: uid })
                     .then((tierRes) => {
                         if (tierRes && tierRes.tier) {
                             const cur = readMemberProfile() || memberProfile;
@@ -1888,12 +1923,39 @@
             if (el && !el.value.trim() && value) el.value = String(value);
         }
 
+        // ดึงข้อมูลสมาชิกแก้ไขล่าสุดจากหน้าเว็บ YATEEM TV เท่านั้นทั้งสองเว็บ เพื่อใช้เป็นขั้นตอนยืนยันออเดอร์
         function prefillOrderForm(type, p) {
-            if (!p) return;
-            fillIfEmpty(type + '-fullname', p.fullname);
-            fillIfEmpty(type + '-phone', p.phone);
-            fillIfEmpty(type + '-address', p.address);
+            const mem = readMemberProfile();
+            const data = mem || p || readLocalProfile();
+            if (!data) return;
+
+            const fn = document.getElementById(type + '-fullname');
+            const ph = document.getElementById(type + '-phone');
+            const ad = document.getElementById(type + '-address');
+
+            // ใช้ชื่อ ที่อยู่ เบอร์โทร ที่แก้ไขล่าสุดจาก YATEEM TV เสมอ
+            if (fn && (data.fullname || data.name)) fn.value = data.fullname || data.name;
+            if (ph && data.phone) ph.value = data.phone;
+            if (ad && data.address) ad.value = data.address;
+
             if (type === 'food') checkFoodAddressArea(); // เปิด/ปิดปุ่มส่งตามที่อยู่ที่เพิ่งเติม
+
+            // กล่องแจ้งเตือนข้อมูลสมาชิกบนหัวฟอร์มยืนยันออเดอร์
+            const badge = document.getElementById(type + '-member-info-badge');
+            const sub = document.getElementById(type + '-member-info-sub');
+            if (badge) {
+                if (data && (data.fullname || data.phone)) {
+                    badge.classList.remove('hidden');
+                    if (sub) {
+                        const isVip = !!(data.isVip || data.tier === 'VIP');
+                        const cleanPhone = String(data.phone || '-');
+                        const memberIdStr = data.memberId ? ` (รหัสสมาชิก: ${data.memberId})` : '';
+                        sub.innerHTML = `คุณ <strong>${data.fullname || data.nickname || 'สมาชิก'}</strong> เบอร์ ${cleanPhone}${memberIdStr} ${isVip ? '<span class="text-amber-700 font-bold ml-1">👑 สมาชิก VIP</span>' : ''}`;
+                    }
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
         }
 
         function resetCheckoutButton(type) {
@@ -1964,8 +2026,12 @@
                 }
             });
 
+            const memFood = readMemberProfile();
+            const cleanPhoneFood = phone.replace(/\D/g, '');
+            const memberUidFood = cleanPhoneFood ? ('member_' + cleanPhoneFood) : (memFood && memFood.memberId ? ('mem_' + memFood.memberId) : '');
+
             const orderData = {
-                userId: webUser ? '' : profile.userId,   // ผู้ใช้เว็บ: หลังบ้านเติม userId จาก idToken เอง
+                userId: webUser ? '' : (profile.userId || memberUidFood || ('member_' + cleanPhoneFood) || ('member_' + Date.now())),
                 fullname: fullname,
                 phone: phone,
                 address: address,
@@ -2053,8 +2119,12 @@
 
             const shippingFee = paymentMethod === 'cod' && nwPaymentSettings ? nwPaymentSettings.codShippingFee : 0;
 
+            const memNw = readMemberProfile();
+            const cleanPhoneNw = phone.replace(/\D/g, '');
+            const memberUidNw = cleanPhoneNw ? ('member_' + cleanPhoneNw) : (memNw && memNw.memberId ? ('mem_' + memNw.memberId) : '');
+
             const orderData = {
-                userId: webUser ? '' : profile.userId,   // ผู้ใช้เว็บ: หลังบ้านเติม userId จาก idToken เอง
+                userId: webUser ? '' : (profile.userId || memberUidNw || ('member_' + cleanPhoneNw) || ('member_' + Date.now())),
                 fullname: fullname,
                 phone: phone,
                 address: address,

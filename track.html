@@ -354,8 +354,13 @@
             return '';
         }
 
+        // ดึงข้อมูลสมาชิกแก้ไขล่าสุดจากหน้าเว็บ YATEEM TV เท่านั้นทั้งสองเว็บ
         function readMemberProfile() {
-            try { return JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null'); } catch (e) { return null; }
+            try {
+                const master = JSON.parse(localStorage.getItem('yateemMasterProfile') || 'null');
+                if (master && (master.fullname || master.phone)) return master;
+                return JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null');
+            } catch (e) { return null; }
         }
 
         function readCachedOrders(uid) {
