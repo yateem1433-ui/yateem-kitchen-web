@@ -106,6 +106,21 @@
         @keyframes foodOpenGlow { 0%,100%{ box-shadow:0 0 0 0 rgba(234,185,52,0.8), 0 4px 14px rgba(234,185,52,0.45); } 50%{ box-shadow:0 0 0 7px rgba(234,185,52,0), 0 4px 20px rgba(234,185,52,0.7); } }
         .food-open-glow{ outline:2px solid #EAB934; outline-offset:0; transform:scale(1.02); animation: foodOpenGlow 1.6s ease-in-out infinite; }
 
+        /* เมื่อเปิดในหน้าเว็บ YATEEM TV: ซ่อน Header ซ้ำซ้อน และ Hero Banner เพื่อให้เปิดมาเจอ 2 แถบอาหารและสินค้ายาตีมทันที */
+        .in-tv-embed #main-sticky-header,
+        .in-tv-embed #hero-banner {
+            display: none !important;
+        }
+        .in-tv-embed .container {
+            padding-top: 10px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+        }
+        .in-tv-embed #tabs {
+            margin-top: 0 !important;
+            margin-bottom: 12px !important;
+        }
+
         /* ชื่อเมนู/ข้อความโปรฯ ในการ์ด: ยอมตัดบรรทัดภาษาไทยได้ (keep-all ทำให้ชื่อยาวๆ ไม่ขึ้นบรรทัดใหม่ ดันการ์ดล้นจอ)
            overflow-wrap:anywhere ลดความกว้างขั้นต่ำของข้อความได้จริง ต่างจาก break-word ที่ไม่ช่วยตอนอยู่ใน flex */
         .menu-text{ word-break: normal; overflow-wrap: anywhere; }
@@ -115,12 +130,20 @@
         .menu-desc{ white-space: pre-line; line-height: 1.5; overflow-wrap: anywhere;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
     </style>
+    <script>
+        // ตรวจจับเมื่อถูกฝังอยู่ใน YATEEM TV หรือมีพารามิเตอร์ embed=tv ให้ซ่อน Header และ Hero Banner ทันที (ป้องกันหน้ากระพริบ)
+        try {
+            if ((window.self !== window.top) || new URLSearchParams(window.location.search).get('embed') === 'tv') {
+                document.documentElement.classList.add('in-tv-embed');
+            }
+        } catch(e){}
+    </script>
 </head>
 <body class="bg-gray-100 font-sans">
 
     <div class="container mx-auto p-4 pb-24">
         <!-- Sticky header (clean white glassmorphism) + search -->
-        <header class="sticky top-0 z-40 -mx-4 px-4 py-3 mb-4" style="background:rgba(255,255,255,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid #F0F0F0;">
+        <header id="main-sticky-header" class="sticky top-0 z-40 -mx-4 px-4 py-3 mb-4" style="background:rgba(255,255,255,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid #F0F0F0;">
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
                     <img src="https://drive.google.com/thumbnail?id=13K6Z1B92MB6UsGCJZsggaHGRGo8baili&sz=w200" alt="Yateem" class="w-10 h-10 rounded-full" style="box-shadow:0 0 0 2px #EAB934;">
@@ -143,7 +166,7 @@
         </header>
 
         <!-- Hero banner (soft light, rounded, ambient shadow) -->
-        <div class="rounded-2xl p-5 mb-5 relative overflow-hidden" style="background:linear-gradient(135deg,#FFFFFF 0%,#FBF3D8 55%,#F7E6B5 100%);border:1px solid #F0F0F0;box-shadow:0 8px 24px rgba(14,32,54,0.08);">
+        <div id="hero-banner" class="rounded-2xl p-5 mb-5 relative overflow-hidden" style="background:linear-gradient(135deg,#FFFFFF 0%,#FBF3D8 55%,#F7E6B5 100%);border:1px solid #F0F0F0;box-shadow:0 8px 24px rgba(14,32,54,0.08);">
             <span class="inline-block text-xs font-bold px-3 py-1 rounded-full mb-2" style="background:#0E2036;color:#EAB934;">🌙 Yateem Market</span>
             <h2 class="text-xl font-bold leading-snug" style="color:#0E2036;">อาหารฮาลาล & สินค้าคุณภาพ<br>ส่งตรงถึงบ้านคุณ</h2>
             <p class="text-xs mt-1" style="color:#093862;">สั่งง่าย จ่ายสะดวก • ทุกการซื้อคือการให้</p>
