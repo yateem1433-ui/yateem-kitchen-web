@@ -301,6 +301,7 @@
                 localStorage.removeItem(LAST_LINE_UID_KEY);
                 localStorage.removeItem(LINE_PROFILE_KEY);
                 localStorage.removeItem('yt_line_profile');
+                localStorage.removeItem('yateemMemberProfile');
             } catch (e) {}
             clearCachedOrders(); // ออกจากระบบ = ลบออเดอร์ที่เก็บไว้ในเครื่องด้วย (เครื่องอาจใช้ร่วมกับคนอื่น)
             try { if (typeof liff !== 'undefined' && liff.isLoggedIn() && !liff.isInClient()) liff.logout(); } catch (e) {}
@@ -351,6 +352,10 @@
                 if (p && p.fullname) return p.fullname;
             } catch (e) {}
             return '';
+        }
+
+        function readMemberProfile() {
+            try { return JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null'); } catch (e) { return null; }
         }
 
         function readCachedOrders(uid) {
@@ -408,6 +413,9 @@
             } else if (channel === 'facebook') {
                 icon = '🔵';
                 label = 'เข้าสู่ระบบด้วย Facebook';
+            } else if (channel === 'member') {
+                icon = '🌟';
+                label = 'สมาชิก Yateem';
             }
             const name = (info && info.name) ? info.name : 'ลูกค้า';
             acc.innerHTML = `<span class="truncate">${icon} ${label}: <b>${escapeHtml(name)}</b></span><button type="button" onclick="handleLogout()" class="text-red-500 hover:text-red-700 underline font-bold ml-2 flex-shrink-0">ออกจากระบบ</button>`;
@@ -435,6 +443,13 @@
             let lastWebUid = null;
             try { lastWebUid = localStorage.getItem(LAST_WEB_UID_KEY); } catch (e) {}
 
+            // ตรวจสอบสมาชิก Yateem
+            const savedMember = readMemberProfile();
+            if (savedMember && savedMember.phone) {
+                const claimInput = document.getElementById('claim-phone');
+                if (claimInput && !claimInput.value) claimInput.value = savedMember.phone;
+            }
+
             // แสดงแคชออเดอร์และแถบบัญชีทันที (ถ้ามี) โดยไม่ต้องรอเชื่อมต่อเน็ต และไม่จำกัดเฉพาะในแอป LINE
             if (lastLineUid) {
                 showCachedOrders(lastLineUid);
@@ -442,6 +457,8 @@
                 showAccountBar({ name: dispName, channel: 'line' });
             } else if (lastWebUid) {
                 showCachedOrders('fb:' + lastWebUid);
+            } else if (savedMember && (savedMember.fullname || savedMember.phone)) {
+                showAccountBar({ name: savedMember.fullname || savedMember.nickname, channel: 'member' });
             }
 
             // 2. เริ่มตรวจสอบ Firebase Auth + LIFF พร้อมกันในเบื้องหลัง

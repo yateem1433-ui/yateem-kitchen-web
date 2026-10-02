@@ -20,7 +20,18 @@
     <link rel="preconnect" href="https://script.google.com">
     <link rel="preconnect" href="https://script.googleusercontent.com">
     <!-- defer: ไม่บล็อกการแสดงผล/การโหลดเมนู (LIFF ใช้ตอนกดสั่งซื้อเท่านั้น) -->
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer>
+        // ฟังการซิงก์โปรไฟล์สมาชิกจาก Yateem TV (iframe/parent)
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'YATEEM_MEMBER_SYNC' && e.data.profile) {
+                try {
+                    localStorage.setItem('yateemMemberProfile', JSON.stringify(e.data.profile));
+                    updateAccountBar();
+                } catch (err) {}
+            }
+        });
+
+    </script>
     <!-- Firebase Auth: ล็อกอิน Google/Facebook (โปรเจกต์เดียวกับ Yateem TV - โดเมนเดียวกัน ล็อกอินครั้งเดียวใช้ได้ทั้งสองเว็บ) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
@@ -1432,6 +1443,10 @@
             try { return JSON.parse(localStorage.getItem(LINE_PROFILE_KEY) || 'null'); } catch (e) { return null; }
         }
 
+        function readMemberProfile() {
+            try { return JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null'); } catch (e) { return null; }
+        }
+
         function webUserLabel(u) {
             const providers = (u.providerData || []).map(p => p && p.providerId);
             const channel = providers.indexOf('facebook.com') > -1 ? 'Facebook' : 'Google';
@@ -1445,7 +1460,12 @@
             const text = document.getElementById('account-bar-text');
             const btn = document.getElementById('account-bar-btn');
             const line = readLineProfile();
-            if (webUser) {
+            const member = readMemberProfile();
+            if (member && (member.fullname || member.phone)) {
+                text.textContent = '🌟 ' + (member.fullname || member.nickname) + ' (สมาชิก Yateem)';
+                btn.textContent = 'ออกจากระบบ';
+                btn.onclick = accountLogout;
+            } else if (webUser) {
                 const l = webUserLabel(webUser);
                 text.textContent = '👤 ' + l.name + ' (' + l.channel + ')';
                 btn.textContent = 'ออกจากระบบ';
@@ -1459,9 +1479,9 @@
                 btn.textContent = 'เข้าสู่ระบบ';
                 btn.onclick = () => { pendingLoginType = null; showOpenInLineNotice(); };
             }
-            // ในแอป LINE ล็อกอินให้อัตโนมัติอยู่แล้ว ไม่ต้องมีปุ่มออก/เข้า
+            // ในแอป LINE ล็อกอินให้อัตโนมัติอยู่แล้ว ไม่ต้องมีปุ่มออก/เข้า ยกเว้นเป็นสมาชิก
             const inLineApp = /\bLine\//i.test(navigator.userAgent || '');
-            btn.classList.toggle('hidden', inLineApp);
+            btn.classList.toggle('hidden', inLineApp && !member);
             bar.classList.remove('hidden');
         }
 
@@ -1474,9 +1494,13 @@
         }
 
         function accountLogout() {
-            if (!confirm('ออกจากระบบใช่ไหมคะ?')) return;
+            if (!confirm('ต้องการออกจากระบบหรือไม่?')) return;
             webLogout();
-            try { localStorage.removeItem(LINE_PROFILE_KEY); localStorage.removeItem('yateemLastLineUid'); } catch (e) {}
+            try {
+                localStorage.removeItem(LINE_PROFILE_KEY);
+                localStorage.removeItem('yateemLastLineUid');
+                localStorage.removeItem('yateemMemberProfile');
+            } catch (e) {}
             try { if (typeof liff !== 'undefined' && liff.isLoggedIn() && !liff.isInClient()) liff.logout(); } catch (e) {}
             profile = {};
             updateAccountBar();
@@ -1636,21 +1660,42 @@
 
         function readLocalProfile() {
             const uid = currentProfileUid();
-            if (!uid) return null;
-            try { return JSON.parse(localStorage.getItem(PROFILE_STORAGE_PREFIX + uid) || 'null'); } catch (e) { return null; }
+            let p = null;
+            if (uid) {
+                try { p = JSON.parse(localStorage.getItem(PROFILE_STORAGE_PREFIX + uid) || 'null'); } catch (e) {}
+            }
+            if (!p || (!p.fullname && !p.phone)) {
+                const mem = readMemberProfile();
+                if (mem && (mem.fullname || mem.phone)) {
+                    p = { fullname: mem.fullname || '', phone: mem.phone || '', address: mem.address || '' };
+                }
+            }
+            return p;
         }
 
         // รวมกับของเดิม - ช่องไหนค่าใหม่ว่างให้คงค่าเดิมไว้
         function saveLocalProfile(p) {
             const uid = currentProfileUid();
-            if (!uid || !p) return;
             const old = readLocalProfile() || {};
             const merged = {
                 fullname: String(p.fullname || old.fullname || ''),
                 phone: String(p.phone || old.phone || ''),
                 address: String(p.address || old.address || '')
             };
-            try { localStorage.setItem(PROFILE_STORAGE_PREFIX + uid, JSON.stringify(merged)); } catch (e) { /* เต็ม/โหมดส่วนตัว - ข้ามได้ */ }
+            if (uid) {
+                try { localStorage.setItem(PROFILE_STORAGE_PREFIX + uid, JSON.stringify(merged)); } catch (e) { /* เต็ม/โหมดส่วนตัว - ข้ามได้ */ }
+            }
+            const mem = readMemberProfile();
+            if (mem) {
+                try {
+                    localStorage.setItem('yateemMemberProfile', JSON.stringify(Object.assign({}, mem, {
+                        fullname: merged.fullname || mem.fullname,
+                        phone: merged.phone || mem.phone,
+                        address: merged.address || mem.address,
+                        updatedAt: Date.now()
+                    })));
+                } catch (e) {}
+            }
         }
 
         function fillIfEmpty(id, value) {
