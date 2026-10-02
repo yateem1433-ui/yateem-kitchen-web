@@ -646,6 +646,32 @@
                 refreshLineAccount(); // เริ่ม liff.init() + ดึงโปรไฟล์ LINE ถ้ายังล็อกอินค้างอยู่ (ถ้าพังเดี๋ยวลองใหม่ตอนกดเช็กเอาต์)
                 initWebAuth();
                 bindDraftAutoSave();
+                // ตรวจสอบสถานะระดับสมาชิก VIP ล่าสุดจากหลังบ้าน
+                setTimeout(() => {
+                    const mem = readMemberProfile();
+                    if (mem && (mem.phone || mem.fullname)) {
+                        const uid = currentProfileUid();
+                        callApi('getMemberTierStatus', { phone: mem.phone, userId: uid })
+                            .then((tierRes) => {
+                                if (tierRes && tierRes.tier) {
+                                    mem.isVip = tierRes.isVip;
+                                    mem.tier = tierRes.tier;
+                                    mem.vipReason = tierRes.vipReason;
+                                    mem.monthlySpent = tierRes.monthlySpent;
+                                    mem.yearlySpent = tierRes.yearlySpent;
+                                    mem.neededMonthly = tierRes.neededMonthly;
+                                    mem.neededYearly = tierRes.neededYearly;
+                                    localStorage.setItem('yateemMemberProfile', JSON.stringify(mem));
+                                    localStorage.setItem('yateemSavedMemberInfo', JSON.stringify(mem));
+                                    updateAccountBar();
+                                    if (window.parent && window.parent !== window) {
+                                        try { window.parent.postMessage({ type: 'YATEEM_MEMBER_SYNC', profile: mem }, '*'); } catch (e) {}
+                                    }
+                                }
+                            })
+                            .catch(() => {});
+                    }
+                }, 1600);
             };
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSdks);
             else initSdks();
@@ -1511,15 +1537,19 @@
             const line = readLineProfile();
             const member = readMemberProfile();
             if (member && (member.fullname || member.phone)) {
+                const isVip = !!(member.isVip || member.tier === 'VIP');
                 let avHtml = '';
                 if (member.avatar && (member.avatar.startsWith('data:') || member.avatar.startsWith('http'))) {
-                    avHtml = `<img src="${member.avatar}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;margin-right:6px;border:1.5px solid #EAB934">`;
+                    avHtml = `<img src="${member.avatar}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;margin-right:6px;border:2px solid ${isVip ? '#EAB934' : '#d1d5db'};${isVip ? 'box-shadow:0 0 8px rgba(234,185,52,.45)' : ''}">`;
                 } else if (member.avatar) {
                     avHtml = member.avatar + ' ';
                 } else {
-                    avHtml = '🌟 ';
+                    avHtml = isVip ? '👑 ' : '🌟 ';
                 }
-                text.innerHTML = avHtml + (member.fullname || member.nickname) + ' <span style="color:#d97706;font-size:12px;font-weight:600">(สมาชิก Yateem)</span>';
+                const tierBadge = isVip
+                    ? `<span style="background:linear-gradient(135deg,#EAB934,#F59E0B);color:#070B14;font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;box-shadow:0 2px 6px rgba(234,185,52,.35);margin-left:4px">👑 สมาชิก VIP</span>`
+                    : `<span style="color:#d97706;font-size:12px;font-weight:600;margin-left:4px">(สมาชิก Yateem)</span>`;
+                text.innerHTML = avHtml + (member.fullname || member.nickname) + ' ' + tierBadge;
                 btn.textContent = 'ออกจากระบบ';
                 btn.onclick = accountLogout;
             } else if (webUser) {
@@ -1804,14 +1834,52 @@
             // 5. อัปเดตแถบสมาชิกด้านบนให้แสดงสถานะสมาชิกทันที
             updateAccountBar();
 
-            // 6. อัปเดตข้อความบนการ์ดแสดงผลเมื่อสั่งซื้อสำเร็จ
+            // 6. ตรวจสอบระดับสมาชิก VIP ล่าสุดจากเซิร์ฟเวอร์ (เกณฑ์ 2,000 บ./เดือน หรือ 12,000 บ./ปี หรือแอดมินปรับให้)
+            try {
+                callApi('getMemberTierStatus', { phone: cleanPhone, userId: uid })
+                    .then((tierRes) => {
+                        if (tierRes && tierRes.tier) {
+                            const cur = readMemberProfile() || memberProfile;
+                            cur.isVip = tierRes.isVip;
+                            cur.tier = tierRes.tier;
+                            cur.vipReason = tierRes.vipReason;
+                            cur.monthlySpent = tierRes.monthlySpent;
+                            cur.yearlySpent = tierRes.yearlySpent;
+                            cur.neededMonthly = tierRes.neededMonthly;
+                            cur.neededYearly = tierRes.neededYearly;
+                            localStorage.setItem('yateemMemberProfile', JSON.stringify(cur));
+                            localStorage.setItem('yateemSavedMemberInfo', JSON.stringify(cur));
+                            updateAccountBar();
+                            if (window.parent && window.parent !== window) {
+                                try { window.parent.postMessage({ type: 'YATEEM_MEMBER_SYNC', profile: cur }, '*'); } catch (e) {}
+                            }
+
+                            const descText = cur.isVip
+                                ? `👑 คุณได้รับสถานะสมาชิก VIP YATEEM เรียบร้อยแล้วค่ะ! (รหัสสมาชิก: ${cur.memberId})`
+                                : `รหัสสมาชิก: ${cur.memberId} • ยอดเดือนนี้ ${Number(cur.monthlySpent||0).toLocaleString()}/2,000 บ. (ขาดอีก ${Number(cur.neededMonthly||2000).toLocaleString()} บ. จะได้เป็นสมาชิก VIP 👑)`;
+                            const fbd = document.getElementById('food-member-desc');
+                            if (fbd) fbd.textContent = descText;
+                            const nbd = document.getElementById('nw-member-desc');
+                            if (nbd) nbd.textContent = descText;
+                        }
+                    })
+                    .catch(() => {});
+            } catch (e) {}
+
+            // อัปเดตข้อความบนการ์ดแสดงผลเมื่อสั่งซื้อสำเร็จ
             const badgeDesc = document.getElementById('food-member-desc');
             if (badgeDesc) {
-                badgeDesc.textContent = `รหัสสมาชิก: ${memberProfile.memberId} (ชื่อ: ${memberProfile.fullname} เบอร์: ${memberProfile.phone}) ระบบจำข้อมูลให้เรียบร้อยแล้วค่ะ`;
+                const isVipNow = !!(memberProfile.isVip || memberProfile.tier === 'VIP');
+                badgeDesc.textContent = isVipNow
+                    ? `👑 คุณคือสมาชิก VIP YATEEM เรียบร้อยแล้วค่ะ! (รหัสสมาชิก: ${memberProfile.memberId})`
+                    : `รหัสสมาชิก: ${memberProfile.memberId} (ชื่อ: ${memberProfile.fullname} เบอร์: ${memberProfile.phone}) สั่งซื้อครบ 2,000 บ./ด. รับสิทธิ์สมาชิก VIP 👑`;
             }
             const nwBadgeDesc = document.getElementById('nw-member-desc');
             if (nwBadgeDesc) {
-                nwBadgeDesc.textContent = `รหัสสมาชิก: ${memberProfile.memberId} (ชื่อ: ${memberProfile.fullname} เบอร์: ${memberProfile.phone}) ระบบจำข้อมูลให้เรียบร้อยแล้วค่ะ`;
+                const isVipNow = !!(memberProfile.isVip || memberProfile.tier === 'VIP');
+                nwBadgeDesc.textContent = isVipNow
+                    ? `👑 คุณคือสมาชิก VIP YATEEM เรียบร้อยแล้วค่ะ! (รหัสสมาชิก: ${memberProfile.memberId})`
+                    : `รหัสสมาชิก: ${memberProfile.memberId} (ชื่อ: ${memberProfile.fullname} เบอร์: ${memberProfile.phone}) สั่งซื้อครบ 2,000 บ./ด. รับสิทธิ์สมาชิก VIP 👑`;
             }
         }
 
