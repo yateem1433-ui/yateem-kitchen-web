@@ -20,18 +20,50 @@
     <link rel="preconnect" href="https://script.google.com">
     <link rel="preconnect" href="https://script.googleusercontent.com">
     <!-- defer: ไม่บล็อกการแสดงผล/การโหลดเมนู (LIFF ใช้ตอนกดสั่งซื้อเท่านั้น) -->
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
+    <script>
         // ฟังการซิงก์โปรไฟล์สมาชิกจาก Yateem TV (iframe/parent)
-        window.addEventListener('message', function(e) {
-            if (e.data && e.data.type === 'YATEEM_MEMBER_SYNC' && e.data.profile) {
+        (function() {
+            function syncProfileData(p) {
+                if (!p || (!p.fullname && !p.phone)) return;
                 try {
-                    localStorage.setItem('yateemMemberProfile', JSON.stringify(e.data.profile));
-                    localStorage.setItem('yateemSavedMemberInfo', JSON.stringify(e.data.profile));
-                    updateAccountBar();
+                    localStorage.setItem('yateemMemberProfile', JSON.stringify(p));
+                    localStorage.setItem('yateemSavedMemberInfo', JSON.stringify(p));
+                    localStorage.setItem('yateemMasterProfile', JSON.stringify(p));
+                    var cleanPhone = String(p.phone || '').replace(/\D/g, '');
+                    if (cleanPhone) {
+                        var uid = 'member_' + cleanPhone;
+                        localStorage.setItem('yateemProfile_' + uid, JSON.stringify({
+                            fullname: p.fullname || '',
+                            phone: p.phone || '',
+                            address: p.address || ''
+                        }));
+                        localStorage.setItem('yateemLastLineUid', uid);
+                    }
+                    localStorage.setItem('yateemLastProfile', JSON.stringify({
+                        fullname: p.fullname || '',
+                        phone: p.phone || '',
+                        address: p.address || ''
+                    }));
+                    if (typeof updateAccountBar === 'function') updateAccountBar();
+                    if (typeof prefillOrderForm === 'function') {
+                        prefillOrderForm('food', p);
+                        prefillOrderForm('nw', p);
+                    }
                 } catch (err) {}
             }
-        });
 
+            window.addEventListener('message', function(e) {
+                if (e.data && e.data.type === 'YATEEM_MEMBER_SYNC' && e.data.profile) {
+                    syncProfileData(e.data.profile);
+                }
+            });
+
+            // ร้องขอโปรไฟล์สมาชิกจากหน้าหลัก (YATEEM TV) ทันทีถ้าฝังอยู่ใน iframe
+            if (window.parent && window.parent !== window) {
+                try { window.parent.postMessage({ type: 'YATEEM_REQUEST_MEMBER' }, '*'); } catch (err) {}
+            }
+        })();
     </script>
     <!-- Firebase Auth: ล็อกอิน Google/Facebook (โปรเจกต์เดียวกับ Yateem TV - โดเมนเดียวกัน ล็อกอินครั้งเดียวใช้ได้ทั้งสองเว็บ) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
@@ -658,6 +690,10 @@
                 refreshLineAccount(); // เริ่ม liff.init() + ดึงโปรไฟล์ LINE ถ้ายังล็อกอินค้างอยู่ (ถ้าพังเดี๋ยวลองใหม่ตอนกดเช็กเอาต์)
                 initWebAuth();
                 bindDraftAutoSave();
+                // ขอข้อมูลสมาชิกจาก Yateem TV (parent) ถ้าถูกฝังเป็น iframe
+                if (window.parent && window.parent !== window) {
+                    try { window.parent.postMessage({ type: 'YATEEM_REQUEST_MEMBER' }, '*'); } catch (err) {}
+                }
                 // ตรวจสอบสถานะระดับสมาชิก VIP ล่าสุดจากหลังบ้าน
                 setTimeout(() => {
                     const mem = readMemberProfile();
@@ -1530,7 +1566,11 @@
             try {
                 const m = JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null');
                 if (m && (m.fullname || m.phone)) return m;
-                return JSON.parse(localStorage.getItem('yateemSavedMemberInfo') || 'null');
+                const saved = JSON.parse(localStorage.getItem('yateemSavedMemberInfo') || 'null');
+                if (saved && (saved.fullname || saved.phone)) return saved;
+                const master = JSON.parse(localStorage.getItem('yateemMasterProfile') || 'null');
+                if (master && (master.fullname || master.phone)) return master;
+                return null;
             } catch (e) { return null; }
         }
 
@@ -1777,6 +1817,14 @@
                 if (mem && (mem.fullname || mem.phone)) {
                     p = { fullname: mem.fullname || '', phone: mem.phone || '', address: mem.address || '' };
                 }
+            }
+            if (!p || (!p.fullname && !p.phone)) {
+                try {
+                    const master = JSON.parse(localStorage.getItem('yateemMasterProfile') || 'null');
+                    if (master && (master.fullname || master.phone)) {
+                        p = { fullname: master.fullname || '', phone: master.phone || '', address: master.address || '' };
+                    }
+                } catch (e) {}
             }
             if (!p || (!p.fullname && !p.phone)) {
                 try { p = JSON.parse(localStorage.getItem('yateemLastProfile') || 'null'); } catch (e) {}
