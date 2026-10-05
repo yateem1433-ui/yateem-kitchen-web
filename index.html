@@ -1483,14 +1483,32 @@
             return 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้งค่ะ' + (code ? ' (' + code + ')' : '');
         }
 
-        // ข้อมูลตัวตนที่แนบไปกับทุกคำขอที่เกี่ยวกับลูกค้า: เว็บ = idToken (หลังบ้านตรวจเอง), LINE = userId แบบเดิม
+        // ข้อมูลตัวตนที่แนบไปกับทุกคำขอที่เกี่ยวกับลูกค้า: เว็บ = idToken (หลังบ้านตรวจเอง), LINE = userId, สมาชิก = member_<เบอร์โทร>
         async function identityParams() {
             if (webUser) return { idToken: await webUser.getIdToken() };
-            return { userId: profile.userId };
+            if (profile && profile.userId) return { userId: profile.userId };
+            const mem = readMemberProfile();
+            if (mem) {
+                const clean = String(mem.phone || '').replace(/\D/g, '');
+                return { userId: clean ? ('member_' + clean) : (mem.memberId ? ('mem_' + mem.memberId) : '') };
+            }
+            return { userId: '' };
         }
 
         function closeLoginChooser() {
             document.getElementById('open-in-line-notice').classList.add('hidden');
+        }
+
+        function memberLoginAndContinue() {
+            const type = pendingLoginType || currentTab();
+            closeLoginChooser();
+            continueCheckout(type);
+        }
+
+        function guestContinueCheckout() {
+            const type = pendingLoginType || currentTab();
+            closeLoginChooser();
+            continueCheckout(type);
         }
 
         async function webLogin(providerName) {
@@ -1707,12 +1725,19 @@
             btnNext.innerText = 'กำลังตรวจสอบ...';
             btnCancel.classList.remove('hidden');
 
-            // 1) ล็อกอิน Google/Facebook อยู่แล้ว (จากร้านนี้หรือจากหน้า Yateem TV) - ไปต่อได้เลย
+            // 1) สมาชิก YATEEM TV (มีชื่อ/เบอร์โทร หรือ Master Profile ในเครื่องแล้ว) - สั่งซื้อได้ทันที ไม่ต้องล็อกอินซ้ำ
+            const mem = readMemberProfile();
+            if (mem && (mem.fullname || mem.phone)) {
+                await continueCheckout(type);
+                return;
+            }
+
+            // 2) ล็อกอิน Google/Facebook อยู่แล้ว (จากร้านนี้หรือจากหน้า Yateem TV) - ไปต่อได้เลย
             await initWebAuth();
             if (checkoutCancelled[type]) return;
             if (webUser) { await continueCheckout(type); return; }
 
-            // 2) LINE
+            // 3) LINE
             let liffOk = true;
             try {
                 await withTimeout(ensureLiffInit(), 8000, 'เชื่อมต่อ LINE ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
@@ -1723,7 +1748,7 @@
 
             if (!liffOk || !liff.isLoggedIn()) {
                 if (!liffOk || !liff.isInClient()) {
-                    // นอกแอป LINE - ให้เลือกล็อกอินด้วย Google / Facebook / LINE ได้เลย ไม่บังคับ LINE อย่างเดียวแล้ว
+                    // นอกแอป LINE - ให้เลือกล็อกอินด้วย Google / LINE หรือ สั่งซื้อทันที (ไม่ผูกบัญชี)
                     resetCheckoutButton(type);
                     pendingLoginType = type;
                     showOpenInLineNotice();
@@ -1739,16 +1764,31 @@
         }
 
         function showOpenInLineNotice() {
+            const memBtn = document.getElementById('login-member-btn');
+            const mem = readMemberProfile();
+            if (memBtn) {
+                if (mem && (mem.fullname || mem.phone)) {
+                    memBtn.textContent = '🌟 ยืนยันสั่งซื้อด้วยสมาชิก ' + (mem.fullname || mem.nickname || 'YATEEM TV');
+                    memBtn.classList.remove('hidden');
+                } else {
+                    memBtn.classList.add('hidden');
+                }
+            }
             document.getElementById('open-in-line-notice').classList.remove('hidden');
         }
 
         async function continueCheckout(type) {
-            let idp;
+            let idp = {};
             try {
-                if (!webUser && !profile.userId) {
-                    profile = await liff.getProfile();
-                    saveLineProfile(profile);
-                    updateAccountBar();
+                // ถ้าล็อกอิน LINE ไว้ ดึงโปรไฟล์มาอัปเดต (อย่าเรียก liff.getProfile() ถ้าไม่ได้ล็อกอิน LINE เพราะจะ throw error)
+                if (!webUser && (!profile || !profile.userId)) {
+                    if (typeof liff !== 'undefined' && liff.isLoggedIn && liff.isLoggedIn()) {
+                        try {
+                            profile = await liff.getProfile();
+                            saveLineProfile(profile);
+                            updateAccountBar();
+                        } catch (e) {}
+                    }
                 }
                 idp = await identityParams();
             } catch (err) {
