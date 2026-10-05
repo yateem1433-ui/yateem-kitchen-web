@@ -32,13 +32,28 @@
 
         <div id="error-msg" class="hidden text-center p-10 text-red-500 font-bold"></div>
 
-        <div id="not-in-client" class="hidden text-center p-8">
-            <p class="text-5xl mb-3">👤</p>
-            <p class="text-gray-700 font-bold mb-1">เข้าสู่ระบบเพื่อดูออเดอร์ของคุณ</p>
-            <p class="text-sm text-gray-500 mb-5">ใช้บัญชีเดียวกับตอนสั่งซื้อนะคะ</p>
-            <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-3 rounded-lg mb-2">🟢 เข้าสู่ระบบด้วย Google</button>
-            <button onclick="lineLogin()" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mb-2">💬 เข้าสู่ระบบด้วย LINE</button>
-            <a id="open-in-line-link" href="#" class="inline-block text-sm text-green-700 underline mt-1">หรือเปิดในแอป LINE</a>
+        <div id="not-in-client" class="hidden text-center p-6">
+            <p class="text-4xl mb-2">📦</p>
+            <p class="text-gray-800 font-bold text-base mb-1">ติดตามสถานะออเดอร์</p>
+            <p class="text-xs text-gray-500 mb-4">ค้นหาด้วยเบอร์โทรที่ใช้สั่งซื้อ หรือเข้าสู่ระบบด้วย Google</p>
+
+            <div class="max-w-xs mx-auto bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-left mb-3 shadow-sm">
+                <p class="text-xs font-bold text-gray-700 mb-1">📱 ตรวจสอบด้วยเบอร์โทรศัพท์</p>
+                <div class="flex gap-2">
+                    <input type="tel" id="track-phone-input" inputmode="numeric" placeholder="เบอร์โทร เช่น 0812345678" class="flex-1 p-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                    <button onclick="trackByPhoneDirect()" id="track-phone-btn" class="bg-blue-600 text-white font-bold px-3 py-2 rounded-lg text-xs hover:bg-blue-700 shadow-sm transition whitespace-nowrap">ตรวจสอบ</button>
+                </div>
+            </div>
+
+            <div class="relative my-3">
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
+                <div class="relative flex justify-center text-xs"><span class="bg-white px-2 text-gray-400">หรือ</span></div>
+            </div>
+
+            <button onclick="webLogin('google')" class="block w-full bg-white border border-gray-300 text-gray-800 font-bold py-2.5 rounded-lg mb-1 shadow-sm hover:bg-gray-50 text-xs">🟢 เข้าสู่ระบบด้วย Google</button>
+            <!-- ซ่อนปุ่ม LINE Login เพื่อความเรียบร้อยและดูเป็นมืออาชีพ -->
+            <button id="btn-line-login" onclick="lineLogin()" class="hidden block w-full bg-green-600 text-white font-bold py-2.5 rounded-lg mb-2 text-xs">💬 เข้าสู่ระบบด้วย LINE</button>
+            <a id="open-in-line-link" href="#" class="hidden inline-block text-xs text-green-700 underline mt-1">หรือเปิดในแอป LINE</a>
         </div>
         <p id="web-account" class="hidden text-center text-xs text-gray-500 pt-3"></p>
 
@@ -47,7 +62,7 @@
             <p class="mb-5">ยังไม่มีประวัติการสั่งซื้อของคุณค่ะ</p>
             <div class="max-w-xs mx-auto bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
                 <p class="text-sm text-gray-700 font-bold mb-1">เคยสั่งแล้วแต่ไม่เห็นประวัติ?</p>
-                <p class="text-xs text-gray-500 mb-3">กรอกเบอร์โทรที่ใช้ตอนสั่ง เพื่อดึงประวัติออเดอร์เข้าบัญชี LINE นี้ค่ะ</p>
+                <p class="text-xs text-gray-500 mb-3">กรอกเบอร์โทรที่ใช้ตอนสั่ง เพื่อค้นหาประวัติออเดอร์ค่ะ</p>
                 <input type="tel" id="claim-phone" inputmode="numeric" placeholder="เบอร์โทรที่ใช้สั่ง เช่น 0812345678" class="w-full p-2 border rounded text-sm mb-2">
                 <button onclick="claimByPhone()" id="claim-btn" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-blue-700">🔎 ดึงประวัติออเดอร์ด้วยเบอร์โทร</button>
             </div>
@@ -359,8 +374,24 @@
             try {
                 const master = JSON.parse(localStorage.getItem('yateemMasterProfile') || 'null');
                 if (master && (master.fullname || master.phone)) return master;
-                return JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null');
+                const m = JSON.parse(localStorage.getItem('yateemMemberProfile') || 'null');
+                if (m && (m.fullname || m.phone)) return m;
+                return JSON.parse(localStorage.getItem('yateemSavedMemberInfo') || 'null');
             } catch (e) { return null; }
+        }
+
+        // ค้นหาและติดตามออเดอร์ด้วยเบอร์โทรศัพท์โดยตรง (แบบ e-commerce มืออาชีพ ไม่ต้องพึ่ง LINE)
+        function trackByPhoneDirect() {
+            const input = document.getElementById('track-phone-input');
+            const phone = (input && input.value.trim()) || '';
+            const clean = phone.replace(/\D/g, '');
+            if (!clean || clean.length < 9) {
+                alert('กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้องค่ะ (เช่น 0812345678)');
+                return;
+            }
+            const uid = 'member_' + clean;
+            showAccountBar({ name: phone, channel: 'phone' });
+            startOrdersFor(uid);
         }
 
         function readCachedOrders(uid) {
@@ -421,6 +452,12 @@
             } else if (channel === 'member') {
                 icon = '🌟';
                 label = 'สมาชิก Yateem';
+            } else if (channel === 'phone') {
+                icon = '📱';
+                label = 'เบอร์โทร';
+            } else {
+                icon = '👤';
+                label = 'บัญชี';
             }
             const name = (info && info.name) ? info.name : 'ลูกค้า';
             acc.innerHTML = `<span class="truncate">${icon} ${label}: <b>${escapeHtml(name)}</b></span><button type="button" onclick="handleLogout()" class="text-red-500 hover:text-red-700 underline font-bold ml-2 flex-shrink-0">ออกจากระบบ</button>`;
@@ -450,9 +487,12 @@
 
             // ตรวจสอบสมาชิก Yateem
             const savedMember = readMemberProfile();
+            const cleanMemberPhone = savedMember && String(savedMember.phone || '').replace(/\D/g, '');
             if (savedMember && savedMember.phone) {
                 const claimInput = document.getElementById('claim-phone');
                 if (claimInput && !claimInput.value) claimInput.value = savedMember.phone;
+                const trackInput = document.getElementById('track-phone-input');
+                if (trackInput && !trackInput.value) trackInput.value = savedMember.phone;
             }
 
             // แสดงแคชออเดอร์และแถบบัญชีทันที (ถ้ามี) โดยไม่ต้องรอเชื่อมต่อเน็ต และไม่จำกัดเฉพาะในแอป LINE
@@ -520,12 +560,19 @@
                 return;
             }
 
-            // 7. กรณีเคยล็อกอิน Google ไว้ แต่ Firebase idToken ยังไม่พร้อม และแสดงแคชไปแล้ว
+            // 7. หากเป็นสมาชิก Yateem TV หรือมีเบอร์โทรในเครื่อง ให้โหลดออเดอร์ของสมาชิกทันที
+            if (cleanMemberPhone) {
+                showAccountBar({ name: savedMember.fullname || savedMember.nickname || savedMember.phone, channel: 'member' });
+                startOrdersFor('member_' + cleanMemberPhone);
+                return;
+            }
+
+            // 8. กรณีเคยล็อกอิน Google ไว้ แต่ Firebase idToken ยังไม่พร้อม และแสดงแคชไปแล้ว
             if (shownFromCache) {
                 return;
             }
 
-            // 8. ไม่เคยเข้าสู่ระบบมาก่อน -> แสดงปุ่มตัวเลือกล็อกอิน
+            // 9. ไม่เคยเข้าสู่ระบบมาก่อน -> แสดงตัวเลือกล็อกอิน/ค้นหาด้วยเบอร์
             showLoginChoices();
         }
 
