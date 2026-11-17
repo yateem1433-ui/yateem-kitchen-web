@@ -297,6 +297,16 @@
 
 
 
+                    <!-- ออเดอร์รวม (ตะกร้ามีทั้งอาหารและสินค้าแห้ง) - renderFoodMixBlock() เติมรายการ/ยอด -->
+                    <div id="food-mix-block" class="hidden mb-5 p-3 rounded-lg bg-blue-50 border border-blue-300 text-sm">
+                        <p class="font-bold text-blue-800 mb-1">📦 สินค้าแห้งในตะกร้า (จัดส่งพร้อมอาหาร)</p>
+                        <div id="food-mix-items" class="text-gray-700 space-y-0.5"></div>
+                        <div class="mt-2 pt-2 border-t border-blue-200 text-gray-700">
+                            <p>ค่าอาหาร: <span id="food-mix-food-total" class="font-bold">0</span> บาท</p>
+                            <p>ค่าสินค้าแห้ง: <span id="food-mix-nw-total" class="font-bold">0</span> บาท</p>
+                        </div>
+                    </div>
+
                     <div class="mb-6 p-4 border border-dashed border-green-500 rounded-lg text-center bg-green-50">
                         <p class="pay-red text-sm text-green-700 font-bold mb-2">ช่องทางชำระเงิน ( พร้อมเพย์ )</p>
                         <img id="food-qr-image" src="" alt="QR พร้อมเพย์" class="mx-auto w-40 h-40 mb-2 object-contain hidden">
@@ -304,7 +314,7 @@
                         <p class="text-sm text-gray-700">ธนาคาร: <span id="food-bank-name" class="font-bold">-</span></p>
                         <p class="pay-red text-sm text-gray-700">เลขที่บัญชี: <span id="food-bank-account-number" class="font-bold">-</span></p>
                         <p class="text-sm font-bold text-gray-700 mt-2">ยอดเงินที่ต้องโอน: <span class="final-total-food text-xl text-green-600">0</span> บาท</p>
-                        <p class="text-xs text-red-500 mt-1">*โอนเฉพาะค่าอาหารเท่านั้น ค่าส่งจ่ายไรเดอร์ในแอปค่ะ</p>
+                        <p id="food-transfer-note" class="text-xs text-red-500 mt-1">*โอนเฉพาะค่าอาหารเท่านั้น ค่าส่งจ่ายไรเดอร์ในแอปค่ะ</p>
                     </div>
 
                     <div class="mb-6">
@@ -544,7 +554,8 @@
         // requestId เดิมจะคืน orderId เดิมแทนการสร้างออเดอร์ใหม่ (findOrderByRequestId_ ใน Code.gs)
         // จึงไม่เกิดออเดอร์ซ้ำแม้ response แรกจะหลุดหายไป
         // ยังคงใช้ timeout ยาว (120 วิ) เพราะต้องรออัปโหลดสลิปเข้า Drive
-        const IDEMPOTENT_WRITE_ACTIONS = new Set(['submitOrder', 'submitNationwideOrder']);
+        // submitCombinedOrder (ตะกร้ารวมอาหาร+ของแห้ง) กันซ้ำด้วย requestId เดียวกันทั้งสองชีต
+        const IDEMPOTENT_WRITE_ACTIONS = new Set(['submitOrder', 'submitNationwideOrder', 'submitCombinedOrder']);
 
         // หลังบ้านใส่คำนำหน้านี้เมื่อคิว LockService เต็ม = ระบบไม่ว่างชั่วคราว ลองใหม่แล้วมีโอกาสสำเร็จ
         // ต่างจาก error จริง (สลิปซ้ำ/นอกพื้นที่/นอกเวลา) ที่ลองใหม่กี่ครั้งก็ได้ผลเดิม
@@ -838,7 +849,7 @@
             const want = (isFoodOpenHours() || isTestMode) ? 'food' : 'nw';
             const current = document.getElementById('panel-food').classList.contains('hidden') ? 'nw' : 'food';
             if (want === current || isCheckoutOpen(current)) return;
-            if (Number(document.getElementById('cart-count-food').innerText) > 0) return;
+            if (cartSummary().count > 0) return; // มีของในตะกร้าแล้ว (ตะกร้ารวมทั้งสองแท็บ) - ไม่ดึงลูกค้าย้ายแท็บ
             switchTab(want);
         }
 
@@ -1010,7 +1021,7 @@
             }
 
             if (method === 'cod' && nwPaymentSettings) {
-                const total = Number(document.getElementById('total-price-nw').innerText.replace(/,/g, '')) || 0;
+                const total = cartSummary().nwTotal; // แถบตะกร้าโชว์ยอดรวมทั้งตะกร้า - ค่าสินค้าแห้งคิดจากตะกร้าจริง
                 document.getElementById('nw-cod-fee-display').innerText = nwPaymentSettings.codShippingFee.toLocaleString();
                 document.getElementById('nw-cod-grand-total').innerText = (total + nwPaymentSettings.codShippingFee).toLocaleString();
             }
@@ -1680,9 +1691,14 @@
         }
 
         // เซฟตะกร้า+แท็บปัจจุบันไว้ก่อน redirect ไปหน้า LINE login (เพราะ external browser จะรีเฟรชหน้าทิ้ง state ทั้งหมด)
+        // เก็บตะกร้าทั้งสองประเภท (ตะกร้ารวม) + บอกว่าเป็นออเดอร์รวมหรือไม่
         function saveCheckoutState(type) {
             try {
-                sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify({ type: type, cart: state[type].cart }));
+                sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify({
+                    type: type,
+                    mix: checkoutMode() === 'mix',
+                    carts: { food: state.food.cart, nw: state.nw.cart }
+                }));
             } catch (err) { /* ignore storage errors */ }
         }
 
@@ -1692,14 +1708,28 @@
                 const el = document.getElementById(`qty-${type}-${itemId}`);
                 if (el) el.innerText = state[type].cart[itemId];
             });
-            calculateTotal(type);
+            calculateTotal();
         }
 
         async function maybeResumeCheckout(type) {
-            if (!pendingResume || pendingResume.type !== type) return;
-            const cart = pendingResume.cart;
+            if (!pendingResume) return;
+            // ออเดอร์รวม: รอให้เมนูทั้งสองแท็บโหลดเสร็จก่อน (ไม่งั้นคิดยอดสินค้าแห้งไม่ได้) แล้วไปต่อที่ฟอร์มอาหาร
+            if (pendingResume.mix) {
+                if (!state.food.menuData.length || !state.nw.menuData.length) return;
+                type = pendingResume.type;
+            } else if (pendingResume.type !== type) {
+                return;
+            }
+            const resume = pendingResume;
             pendingResume = null;
-            restoreCart(type, cart);
+            if (resume.carts) {
+                restoreCart('food', resume.carts.food);
+                restoreCart('nw', resume.carts.nw);
+                saveCarts();
+            } else {
+                restoreCart(type, resume.cart); // รูปแบบเดิม (ก่อนมีตะกร้ารวม)
+            }
+            if (currentTab() !== type) switchTab(type);
 
             // กลับมาจากล็อกอิน Google/Facebook แบบ redirect
             await initWebAuth();
@@ -1718,6 +1748,15 @@
         // ---------------- เช็กเอาต์: ล็อกอิน LINE + (เฉพาะอาหาร) verify กทม. ----------------
 
         async function proceedToCheckout(type) {
+            // ตะกร้ารวม: ไปฟอร์มตามของในตะกร้า ไม่ใช่ตามแท็บที่กด - มีอาหาร (หรือมีทั้งคู่) = ฟอร์มอาหาร, มีแต่ของแห้ง = ฟอร์มของแห้ง
+            const mode = checkoutMode();
+            if (!mode) return;
+            const target = mode === 'nw' ? 'nw' : 'food';
+            if (target !== type) {
+                userPickedTab = true;
+                switchTab(target);
+                type = target;
+            }
             checkoutCancelled[type] = false;
             const btnNext = document.getElementById('btn-next-' + type);
             const btnCancel = document.getElementById('btn-cancel-' + type);
@@ -2073,16 +2112,13 @@
             const fullname = document.getElementById('food-fullname').value.trim();
             const phone = document.getElementById('food-phone').value.trim();
             const slipFile = document.getElementById('food-slip').files[0];
-            // ตัดลูกน้ำออกก่อนส่ง - total-price-food โชว์ด้วย toLocaleString() เช่น "1,250" ถ้าส่งดิบๆ
-            // Number("1,250") ฝั่งเซิร์ฟเวอร์จะได้ NaN แล้วยอดออเดอร์หายไปเป็น 0
-            const totalPrice = document.getElementById('total-price-food').innerText.replace(/,/g, '');
+            // ยอดคิดจากตะกร้าจริง (แถบด้านล่างโชว์ยอดรวมทั้งตะกร้า ใช้แทนค่าอาหารไม่ได้แล้ว)
+            const cart = cartSummary();
+            const isMix = cart.nw.length > 0; // มีสินค้าแห้งด้วย = ออเดอร์รวม
+            const totalPrice = String(cart.foodTotal);
 
-            const itemsOrdered = [];
-            state.food.menuData.forEach(item => {
-                if (state.food.cart[item.id] > 0) {
-                    itemsOrdered.push({ id: item.id, name: item.name, qty: state.food.cart[item.id] });
-                }
-            });
+            const itemsOrdered = cart.food.map(l => ({ id: l.item.id, name: l.item.name, qty: l.qty }));
+            const nwItemsOrdered = cart.nw.map(l => ({ id: l.item.id, name: l.item.name, qty: l.qty }));
 
             const memFood = readMemberProfile();
             const cleanPhoneFood = phone.replace(/\D/g, '');
@@ -2098,26 +2134,44 @@
                 pickup: isPickup,
                 requestId: state.food.requestId
             };
+            // ออเดอร์รวม: ส่งรายการ/ยอดแยกทั้งสองประเภท หลังบ้านสร้าง 2 ออเดอร์ที่ผูกกันจากสลิปใบเดียว
+            if (isMix) {
+                orderData.foodItems = itemsOrdered;
+                orderData.nwItems = nwItemsOrdered;
+                orderData.foodTotal = cart.foodTotal;
+                orderData.nwTotal = cart.nwTotal;
+            }
 
             try {
                 const slipBase64 = await resizeImageBase64(slipFile, 1600, 0.85);
                 const slipName = `${fullname.replace(/ /g,'_')}_${new Date().getTime()}.png`;
 
                 const idp = await identityParams();
-                callApi('submitOrder', Object.assign({ orderData: orderData, slipBase64: slipBase64, slipName: slipName }, idp))
+                const payload = Object.assign({ orderData: orderData, slipBase64: slipBase64, slipName: slipName }, idp);
+                // เขียนชื่อ action ตรงๆ ทั้งสองแบบ ให้ /check-ids ตรวจคู่กับ case ใน doPost ได้
+                const apiCall = isMix
+                    ? callApi('submitCombinedOrder', payload)
+                    : callApi('submitOrder', payload);
+                apiCall
                     .then((res) => {
                         if (res.success) {
-                            state.food.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
+                            // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้ (ออเดอร์รวมล้างสินค้าแห้งด้วย)
+                            clearCartType('food');
+                            if (isMix) clearCartType('nw');
+                            saveCarts();
+                            calculateTotal();
                             saveLocalProfile({ fullname: fullname, phone: phone, address: isPickup ? '' : address }); // ครั้งหน้าเติมให้ทันที
                             document.getElementById('food-order-section').classList.add('hidden');
-                            document.getElementById('food-rider-order-id').innerText = 'ออเดอร์: ' + res.orderId;
+                            document.getElementById('food-rider-order-id').innerText = (isMix && res.nwOrderId)
+                                ? 'ออเดอร์อาหาร: ' + res.foodOrderId + ' · สินค้าแห้ง: ' + res.nwOrderId
+                                : 'ออเดอร์: ' + res.orderId;
                             const round = foodRoundInfo(foodSettings, new Date());
                             const deliveryEl = document.getElementById('food-rider-delivery');
                             deliveryEl.classList.toggle('hidden', !round);
                             if (round) deliveryEl.innerText = '🗓️ ออเดอร์นี้จัดส่ง' + fmtDelivery(round, round.deliveryDate);
                             document.getElementById('food-rider-section').classList.remove('hidden');
                             window.scrollTo(0, 0);
-                            if (itemsHaveStockLimit('food', itemsOrdered)) refreshMenuFromServer(false);
+                            if (itemsHaveStockLimit('food', itemsOrdered) || (isMix && itemsHaveStockLimit('nw', nwItemsOrdered))) refreshMenuFromServer(false);
                         } else if (res.stockError) {
                             handleStockError('food', res.error);
                             btnSubmit.innerText = 'แจ้งโอน & สั่งซื้อ';
@@ -2157,8 +2211,8 @@
                 ? ('🏪 รับเองที่ร้าน (ยาตีมทีวี)' + (foodSettings && foodSettings.pickupAddress ? ' - ' + foodSettings.pickupAddress : ''))
                 : document.getElementById('nw-address').value;
             const slipFile = document.getElementById('nw-slip').files[0];
-            // ตัดลูกน้ำออกก่อนส่ง - ดู finalSubmitFood สำหรับรายละเอียดว่าทำไม
-            const totalPrice = document.getElementById('total-price-nw').innerText.replace(/,/g, '');
+            // ยอดคิดจากตะกร้าสินค้าแห้งจริง (แถบด้านล่างโชว์ยอดรวมทั้งตะกร้า)
+            const totalPrice = String(cartSummary().nwTotal);
 
             if ((paymentMethod === 'transfer' || isPickup) && !slipFile) {
                 alert('กรุณาแนบสลิปโอนเงินก่อนสั่งซื้อค่ะ');
@@ -2207,7 +2261,7 @@
                                 : (isPickup
                                     ? 'มารับสินค้าเองที่ยาตีมทีวีได้เลยค่ะ แอดมินจะติดต่อยืนยันและนัดเวลารับของนะคะ'
                                     : 'แอดมินจะติดต่อกลับเพื่อยืนยันและติดตามพัสดุนะคะ');
-                            state.nw.cart = {}; saveCarts(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
+                            clearCartType('nw'); saveCarts(); calculateTotal(); // สั่งซื้อสำเร็จแล้ว - ล้างตะกร้าที่พักไว้
                             saveLocalProfile({ fullname: fullname, phone: phone, address: isPickup ? '' : address }); // ครั้งหน้าเติมให้ทันที
                             document.getElementById('nw-order-section').classList.add('hidden');
                             document.getElementById('nw-success-order-id').innerText = 'ออเดอร์: ' + res.orderId;
@@ -2306,7 +2360,9 @@
                 showCartNotice(limit > 0 ? 'สินค้านี้เหลือเพียง ' + limit + ' ชิ้นค่ะ' : 'ขออภัยค่ะ สินค้านี้หมดแล้ว');
             }
 
-            document.getElementById(`qty-${type}-${itemId}`).innerText = s.cart[itemId];
+            // กด +/- จากแผงตะกร้ารวมได้ทั้งสองประเภท - การ์ดของอีกแท็บอาจยังไม่ถูกวาด จึงต้องเช็กก่อน
+            const qtyEl = document.getElementById(`qty-${type}-${itemId}`);
+            if (qtyEl) qtyEl.innerText = s.cart[itemId];
 
             // อัปเดตราคา/ป้ายโปรฯ ของการ์ดนี้ให้ตรงกับจำนวนล่าสุด (ราคาพิเศษมีผลก็ต่อเมื่อซื้อครบ minQty เท่านั้น)
             const priceBlock = document.getElementById(`price-block-${type}-${itemId}`);
@@ -2375,45 +2431,68 @@
             return priceHtml + promoHtml;
         }
 
-        function calculateTotal(type) {
+        // ---------------- ตะกร้ารวม: อาหาร + สินค้าแห้ง คิดเงินรวมกันได้ ----------------
+        // ตะกร้ายังเก็บแยกตามแท็บ (state.food.cart / state.nw.cart - สต็อก/โปรฯ/localStorage ทำงานเหมือนเดิม)
+        // แต่แถบตะกร้าด้านล่างของทั้งสองแท็บโชว์ "ยอดรวมทั้งตะกร้า" และเช็กเอาต์ครั้งเดียว
+        // มีทั้งอาหาร+ของแห้ง = ออเดอร์รวม (submitCombinedOrder): ส่งพร้อมอาหาร/รับเอง โอนครั้งเดียว สลิปเดียว
+
+        // รายการในตะกร้าของแท็บหนึ่ง [{ item, qty }] - ข้ามสินค้าที่ไม่อยู่ในเมนูแล้ว
+        function cartLines(type) {
             const s = state[type];
-            let total = 0;
-            let totalCount = 0;
-            let hasItems = false;
-            s.menuData.forEach(item => {
-                const qty = s.cart[item.id] || 0;
-                if (qty > 0) {
-                    total += effectivePrice(item, qty); // คืนราคารวมของ item นี้แล้ว ไม่ต้องคูณ qty ซ้ำ
-                    totalCount += qty;
-                    hasItems = true;
+            return s.menuData
+                .filter(item => (s.cart[item.id] || 0) > 0)
+                .map(item => ({ item: item, qty: s.cart[item.id] }));
+        }
+
+        function cartSummary() {
+            const food = cartLines('food');
+            const nw = cartLines('nw');
+            const sum = (lines) => lines.reduce((a, l) => a + effectivePrice(l.item, l.qty), 0); // effectivePrice คืนราคารวมของรายการแล้ว
+            const count = (lines) => lines.reduce((a, l) => a + l.qty, 0);
+            const foodTotal = sum(food);
+            const nwTotal = sum(nw);
+            return { food: food, nw: nw, foodTotal: foodTotal, nwTotal: nwTotal, grandTotal: foodTotal + nwTotal, count: count(food) + count(nw) };
+        }
+
+        // 'food' | 'nw' | 'mix' | null (ตะกร้าว่าง)
+        function checkoutMode() {
+            const c = cartSummary();
+            if (c.food.length && c.nw.length) return 'mix';
+            if (c.food.length) return 'food';
+            if (c.nw.length) return 'nw';
+            return null;
+        }
+
+        function calculateTotal() {
+            const c = cartSummary();
+            const hasItems = c.count > 0;
+            ['food', 'nw'].forEach(type => {
+                const countEl = document.getElementById('cart-count-' + type);
+                if (countEl) countEl.innerText = c.count;
+
+                const totalEl = document.getElementById('total-price-' + type);
+                if (totalEl) totalEl.innerText = c.grandTotal.toLocaleString();
+
+                const btnNext = document.getElementById('btn-next-' + type);
+                const activeColor = type === 'food' ? 'bg-green-600' : 'bg-blue-600';
+                if (btnNext) {
+                    if (hasItems) {
+                        btnNext.disabled = false;
+                        btnNext.classList.remove('bg-gray-400');
+                        btnNext.classList.add(activeColor);
+                    } else {
+                        btnNext.disabled = true;
+                        btnNext.classList.remove(activeColor);
+                        btnNext.classList.add('bg-gray-400');
+                    }
+                }
+
+                // ถ้าแผงรายการในตะกร้ากำลังเปิดอยู่ ให้อัปเดตรายการแบบสดด้วย
+                const panel = document.getElementById('cart-panel-' + type);
+                if (panel && !panel.classList.contains('hidden')) {
+                    renderCartPanel(type);
                 }
             });
-
-            const countEl = document.getElementById('cart-count-' + type);
-            if (countEl) countEl.innerText = totalCount;
-
-            const totalEl = document.getElementById('total-price-' + type);
-            if (totalEl) totalEl.innerText = total.toLocaleString();
-
-            const btnNext = document.getElementById('btn-next-' + type);
-            const activeColor = type === 'food' ? 'bg-green-600' : 'bg-blue-600';
-            if (btnNext) {
-                if (hasItems) {
-                    btnNext.disabled = false;
-                    btnNext.classList.remove('bg-gray-400');
-                    btnNext.classList.add(activeColor);
-                } else {
-                    btnNext.disabled = true;
-                    btnNext.classList.remove(activeColor);
-                    btnNext.classList.add('bg-gray-400');
-                }
-            }
-
-            // ถ้าแผงรายการในตะกร้ากำลังเปิดอยู่ ให้อัปเดตรายการแบบสดด้วย
-            const panel = document.getElementById('cart-panel-' + type);
-            if (panel && !panel.classList.contains('hidden')) {
-                renderCartPanel(type);
-            }
         }
 
         function toggleCart(type) {
@@ -2428,10 +2507,10 @@
             }
         }
 
-        function clearCart(type) {
+        // ล้างตะกร้าของแท็บเดียว (ใช้หลังสั่งซื้อสำเร็จ / ภายใน clearCart)
+        function clearCartType(type) {
             const s = state[type];
             s.cart = {};
-            saveCarts();
             s.menuData.forEach(item => {
                 const qtySpan = document.getElementById(`qty-${type}-${item.id}`);
                 if (qtySpan) qtySpan.innerText = 0;
@@ -2441,16 +2520,23 @@
                     priceBlock.innerHTML = renderPriceBlock(type, item, priceColor);
                 }
             });
-            calculateTotal(type);
+        }
+
+        // ปุ่ม "ล้างตะกร้า" - ตะกร้าเดียวกันทั้งสองแท็บ จึงล้างทั้งอาหารและสินค้าแห้ง
+        function clearCart() {
+            clearCartType('food');
+            clearCartType('nw');
+            saveCarts();
+            calculateTotal();
         }
 
         function renderCartPanel(type) {
             const panel = document.getElementById('cart-panel-' + type);
             if (!panel) return;
-            const s = state[type];
-            const itemsInCart = s.menuData.filter(item => (s.cart[item.id] || 0) > 0);
+            const c = cartSummary();
+            const lineCount = c.food.length + c.nw.length;
 
-            if (itemsInCart.length === 0) {
+            if (lineCount === 0) {
                 panel.innerHTML = `
                     <div class="text-center py-4 text-gray-500">
                         <p class="text-2xl mb-1">🛒</p>
@@ -2460,11 +2546,46 @@
                 return;
             }
 
+            // มีสองประเภท = แบ่งหัวข้อ 🍲/📦 พร้อมยอดย่อย + บอกเงื่อนไขการส่งของออเดอร์รวม
+            const isMix = c.food.length > 0 && c.nw.length > 0;
+            const groupHtml = (groupType, lines, subtotal) => {
+                if (!lines.length) return '';
+                const header = isMix
+                    ? `<div class="flex justify-between items-center pt-1 pb-0.5 text-xs font-bold ${groupType === 'food' ? 'text-green-700' : 'text-blue-700'}">
+                           <span>${groupType === 'food' ? '🍲 อาหาร' : '📦 สินค้าแห้ง'}</span>
+                           <span>${subtotal.toLocaleString()} บ.</span>
+                       </div>`
+                    : '';
+                return header + renderCartLines(groupType, lines);
+            };
+            const mixNote = isMix
+                ? `<p class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">📌 มีทั้งอาหารและสินค้าแห้ง: สินค้าแห้งจะจัดส่งพร้อมอาหาร (กรุงเทพ/ปริมณฑล) หรือรับเองที่ร้าน โอนครั้งเดียวค่ะ</p>`
+                : '';
+
+            panel.innerHTML = `
+                <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-200">
+                    <span class="text-xs font-bold text-gray-700 flex items-center gap-1">
+                        <span>🛒 รายการที่เลือก</span>
+                        <span class="bg-gray-200 text-gray-700 rounded-full px-2 py-0.5 text-[10px] font-bold">${lineCount} รายการ</span>
+                    </span>
+                    <button type="button" onclick="clearCart()" class="text-xs text-red-500 hover:text-red-700 font-semibold underline">ล้างตะกร้า</button>
+                </div>
+                <div class="space-y-1">
+                    ${groupHtml('food', c.food, c.foodTotal)}
+                    ${groupHtml('nw', c.nw, c.nwTotal)}
+                </div>
+                ${mixNote}
+            `;
+        }
+
+        // แถวสินค้าในแผงตะกร้า (ปุ่ม +/- เรียก updateCart ของประเภทนั้นๆ)
+        function renderCartLines(type, lines) {
             const activeBtnColor = type === 'food' ? 'bg-green-500' : 'bg-blue-500';
             const activeTextColor = type === 'food' ? 'text-green-600' : 'text-blue-600';
 
-            let itemsHtml = itemsInCart.map(item => {
-                const qty = s.cart[item.id];
+            return lines.map(line => {
+                const item = line.item;
+                const qty = line.qty;
                 const itemTotal = effectivePrice(item, qty);
                 const hasPromoPrice = item.promo && item.promo.price && item.promo.price > 0;
                 const minQty = (item.promo && item.promo.minQty) ? item.promo.minQty : 2;
@@ -2496,19 +2617,6 @@
                     </div>
                 `;
             }).join('');
-
-            panel.innerHTML = `
-                <div class="flex justify-between items-center pb-2 mb-2 border-b border-gray-200">
-                    <span class="text-xs font-bold text-gray-700 flex items-center gap-1">
-                        <span>🛒 รายการที่เลือก</span>
-                        <span class="bg-gray-200 text-gray-700 rounded-full px-2 py-0.5 text-[10px] font-bold">${itemsInCart.length} รายการ</span>
-                    </span>
-                    <button type="button" onclick="clearCart('${type}')" class="text-xs text-red-500 hover:text-red-700 font-semibold underline">ล้างตะกร้า</button>
-                </div>
-                <div class="space-y-1">
-                    ${itemsHtml}
-                </div>
-            `;
         }
 
         function showOrderForm(type) {
@@ -2516,13 +2624,34 @@
             if (panel) panel.classList.add('hidden');
             document.getElementById(type === 'food' ? 'food-menu-section' : 'nw-menu-section').classList.add('hidden');
             document.getElementById(type === 'food' ? 'food-order-section' : 'nw-order-section').classList.remove('hidden');
-            const total = document.getElementById('total-price-' + type).innerText;
-            document.querySelectorAll('.final-total-' + type).forEach(el => el.innerText = total);
+            // ยอดที่ต้องโอนคิดจากตะกร้าจริง (ไม่อ่านจากแถบด้านล่าง ซึ่งตอนนี้โชว์ยอดรวมทั้งตะกร้า)
+            const c = cartSummary();
+            const isMix = type === 'food' && c.nw.length > 0;
+            const total = type === 'food' ? (isMix ? c.grandTotal : c.foodTotal) : c.nwTotal;
+            document.querySelectorAll('.final-total-' + type).forEach(el => el.innerText = total.toLocaleString());
+            if (type === 'food') renderFoodMixBlock(isMix, c);
             // สร้าง requestId ใหม่ทุกครั้งที่เปิดฟอร์มนี้ (การเช็กเอาต์ครั้งใหม่) - ถ้ากดส่งไม่สำเร็จแล้วกดซ้ำ
             // ในฟอร์มเดิมจะยังใช้ requestId เดิม (backend เลยรู้ว่าเป็นความพยายามเดียวกัน กันได้ออเดอร์ซ้ำ)
             state[type].requestId = generateRequestId();
             if (type === 'nw') updateNwPaymentUI();
             window.scrollTo(0, 0);
+        }
+
+        // ฟอร์มอาหารในโหมดออเดอร์รวม: โชว์รายการสินค้าแห้งที่จะส่งพร้อมอาหาร + ยอดแยก/ยอดรวม
+        function renderFoodMixBlock(isMix, c) {
+            const block = document.getElementById('food-mix-block');
+            const note = document.getElementById('food-transfer-note');
+            if (note) note.innerText = isMix
+                ? '*โอนค่าอาหาร + สินค้าแห้งรวมกันครั้งเดียว ค่าส่งจ่ายไรเดอร์ในแอปค่ะ'
+                : '*โอนเฉพาะค่าอาหารเท่านั้น ค่าส่งจ่ายไรเดอร์ในแอปค่ะ';
+            if (!block) return;
+            block.classList.toggle('hidden', !isMix);
+            if (!isMix) return;
+            document.getElementById('food-mix-items').innerHTML = c.nw.map(l =>
+                `<div class="flex justify-between gap-2"><span class="truncate">${escapeHtml(l.item.name)} x ${l.qty}</span><span class="whitespace-nowrap">${effectivePrice(l.item, l.qty).toLocaleString()} บ.</span></div>`
+            ).join('');
+            document.getElementById('food-mix-food-total').innerText = c.foodTotal.toLocaleString();
+            document.getElementById('food-mix-nw-total').innerText = c.nwTotal.toLocaleString();
         }
 
         function backToMenu(type) {
